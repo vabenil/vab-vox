@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/vox_engine
+vox_engine.so
+vox_engine.dylib
+vox_engine.dll
+vox_engine.a
+vox_engine.lib
+vox_engine-test-*
+*test-library
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
