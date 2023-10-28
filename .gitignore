@@ -15,3 +15,16 @@ vox_engine-test-*
 *.o
 *.obj
 *.lst
+
+common/libvox_engine_common.a
+common/vox_engine_common.lib
+
+vadgl/libvox_engine_vadgl.a
+vadgl/vox_engine_vadgl.lib
+
+nuklear/libvox_engine_nuklear.a
+nuklear/vox_engine_nuklear.lib
+
+voxel_grid/libvox_engine_voxel_grid.a
+voxel_grid/vox_engine_voxel_grid.lib
+voxel_grid/libvoxel_grid.a
