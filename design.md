@@ -163,4 +163,22 @@ flowchart
     voxel_grid_server --"sync"--> voxel_grid_client
 ```
 
+```mermaid
+flowchart
+    subgraph Grid
+        voxel_grid["VoxelGrid"]
+        voxel["Voxel"]
+        chunk["Chunk"]
+    end
+
+    user_config["Config"]
+    renderer["Renderer"]
+
+    voxel --> chunk
+    chunk --> voxel_grid
+
+    user_config --> renderer
+    voxel_grid --> renderer
+```
+
 ![Class diagram](diagram.png)
