@@ -1,0 +1,9 @@
+{
+    "name": "nuklear",
+    "targetType": "library",
+    "lflags": [
+        "-L$PACKAGE_DIR/lib",
+        "-lnuklear_static"
+    ],
+    "versions": ["BindNuklear_Static"]
+}
