@@ -1,4 +1,4 @@
-module voxel_grid.voxel_chunk;
+module voxel_grid.chunk;
 
 private import std.meta     : AliasSeq;
 private import std.typecons : Nullable, nullable;

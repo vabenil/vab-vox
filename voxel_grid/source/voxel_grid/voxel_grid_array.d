@@ -4,7 +4,7 @@
 +/
 module voxel_grid.voxel_grid_array;
 
-import voxel_grid.voxel_chunk;
+import voxel_grid.chunk;
 import voxel_grid.voxel_grid;
 
 import std.exception    : enforce;

@@ -45,10 +45,9 @@ void main_loop()
 void create_class_diagram()
 {
     import duml_class_gen;
-    import voxel_grid                   : Voxel, VoxelGrid;
-    import voxel_grid.voxel_grid_array  : ChunkArray, VoxelGridArray;
+    import voxel_grid                   : Voxel, Chunk, VoxelGrid;
+    import voxel_grid.voxel_grid_array  : VoxelGridArray;
 
-    alias Chunk = ChunkArray!Voxel;
     alias Grid = VoxelGridArray!Chunk;
 
     static immutable string res =

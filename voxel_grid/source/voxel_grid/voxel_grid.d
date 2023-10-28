@@ -1,7 +1,7 @@
 module voxel_grid.voxel_grid;
 
 import voxel_grid.voxel;
-import voxel_grid.voxel_chunk;
+import voxel_grid.chunk;
 
 import std.typecons : Nullable;
 
