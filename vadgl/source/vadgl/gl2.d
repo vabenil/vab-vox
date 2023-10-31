@@ -1011,7 +1011,7 @@ struct GLAttribute
         // in OpenGL is. But it shouldn't be more than 256 characters, right?
         char[MAX_GL_VARIABLE_NAME] name_buffer;
 
-        // wanted to do it in scopes but it looks kinda ugy that way
+        // wanted to do it in scopes but it looks kinda ugly that way
         auto info_res = gl_wrap!glGetActiveAttrib(
             program_id, loc, MAX_GL_VARIABLE_NAME,
             &length, &size, cast(GLenum *)&type, &name_buffer[0]
@@ -1030,6 +1030,7 @@ struct GLAttribute
         return GLResult!GLAttribute(attr);
     }
 
+    // TODO: Prob don't call from_location here
     static GLResult!GLAttribute from_name(string name, int program_id)
     {
         auto res = get_location(name, program_id);

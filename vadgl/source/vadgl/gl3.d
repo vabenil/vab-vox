@@ -634,3 +634,106 @@ private template get_param_(GLParam p)
 }
 
 alias get_param(GLParam p) = get_param_!p;
+
+// NOTE: Vertex Array Objects aren't
+// available before opengl 3
+struct VArrayObject
+{
+    private {
+        uint id_ = 0;
+    }
+
+    @property uint id() @safe const => this.id_;
+
+    this(uint vao_id) @safe { this.id_ = vao_id; }
+
+    static GLResult!VArrayObject create() @trusted
+    {
+        uint vao_id;
+        glGenVertexArrays(1, &vao_id); // Shouldn't be able to fail
+        return GLResult!VArrayObject(VArrayObject(vao_id));
+    }
+
+    // can fail if id_ is not valid
+    GLResult!void bind() @trusted => gl_wrap!glBindVertexArray(id_).to_glresult();
+
+    // cannot fail
+    static void disable() @trusted => cast(void)VArrayObject().bind();
+}
+
+struct VBufferObject
+{
+    private {
+        uint id_ = 0;
+        GLenum target = GL_ARRAY_BUFFER;
+    }
+
+    // remember that buffer can also take a kind of buffer
+    @trusted
+    static GLResult!VBufferObject create(GLenum target = GL_ARRAY_BUFFER)
+    {
+        uint vbo_id;
+        glGenBuffers(1, &vbo_id); // Shouldn't be able to fail
+        return glresult(VBufferObject(vbo_id, target));
+    }
+
+    // This could only fail if target is invalid. But that's ok
+    static void disable(GLenum target) @trusted => cast(void)VBufferObject().bind(target);
+
+    @trusted
+    static GLResult!void set_data(GLenum target, size_t size, void* data, GLenum usage)
+    {
+        return gl_wrap!glBufferData(target, size, data, usage).to_glresult();
+    }
+
+    @property uint id() @safe const => this.id_;
+
+    this(uint vbo_id, GLenum target = GL_ARRAY_BUFFER)
+    {
+        this.id_ = vbo_id;
+        this.target = target;
+    }
+
+    // can fail if id_ is not valid or if target is not valid
+    @trusted
+    GLResult!void bind(GLenum target) => gl_wrap!glBindBuffer(target, id_).to_glresult();
+
+    // can fail if id_ is not valid
+    @trusted
+    GLResult!void bind() => bind(this.target);
+
+    /*
+       The target is not that important we are only interested in setting the data
+   */
+    GLResult!void set_data(size_t size, void* data = null, GLenum usage = GL_STATIC_DRAW)
+    {
+        if (auto res = this.bind(GL_ARRAY_BUFFER))
+            return res;
+
+        auto res = VBufferObject.set_data(GL_ARRAY_BUFFER, size, data, usage);
+
+        VBufferObject.disable(GL_ARRAY_BUFFER);
+
+        return res;
+    }
+
+    GLResult!void set_data(void[] data, GLenum usage) => set_data(data.length, data.ptr, usage);
+}
+
+/*
+    NOTE:
+    this maps directly to `glVertexAttribPointer` but the name is different.
+    I'm not sure if it's better if I change the name closer to it's OpenGL counterpart
+*/
+// TODO: change error type
+GLResult!void gl_vertex_attribute_conf
+(uint loc, int count, GLType type, size_t stride, size_t offset_, bool normalized = false)
+    => gl_wrap!glVertexAttribPointer(
+            loc, count, cast(GLenum)type,
+            normalized, cast(GLsizei)stride, cast(void*)offset_).to_glresult();
+
+GLResult!void gl_vertex_attributeI_conf
+(uint loc, int count, GLType type, size_t stride, size_t offset_)
+    => gl_wrap!glVertexAttribIPointer(
+            loc, count, cast(GLenum)type,
+            cast(GLsizei)stride, cast(void*)offset_).to_glresult();
