@@ -1,7 +1,9 @@
 {
-	"authors": [
-		"Victor Abenil Fernandez Rodriguez"
-	],
+	"name": "vadgl",
+	"targetType": "library",
+	"license": "MIT",
+	"description": "Abstraction over OpenGL",
+	"authors": [ "Victor Abenil Fernandez Rodriguez"],
 	"copyright": "Copyright © 2023, Victor Abenil Fernandez Rodriguez",
 	"dependencies": {
 		"bindbc-opengl": "~>1.1.0",
@@ -15,9 +17,6 @@
 	],
 	"versions": [
 		"SDL_205",
-		"GL_32"
-	],
-	"description": "OpenGL wrapper",
-	"name": "vadgl",
-	"targetType": "library"
+		"GL_33"
+	]
 }

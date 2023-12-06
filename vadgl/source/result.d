@@ -24,6 +24,8 @@ private enum isFuncValidB(alias fnc, R) =
 // T must have a default constructor
 template Result(ErrorType, T)
 {
+    @safe @nogc nothrow:
+
     @mustuse
     struct Result
     {
@@ -33,7 +35,7 @@ template Result(ErrorType, T)
         static if (!is(T == void)) {
             T value;
 
-            this(ErrorType error, T value) @safe
+            this(ErrorType error, T value)
             {
                 this.error = error;
                 this.value = value;
@@ -47,11 +49,11 @@ template Result(ErrorType, T)
             }
         }
 
-        this(ErrorType error) @safe { this.error = error; }
+        this(ErrorType error) { this.error = error; }
 
 
         bool is_error() const => this.error.is_error();
-        bool opCast(T: bool)() @safe const => is_error();
+        bool opCast(T: bool)() const => is_error();
     }
 }
 
@@ -93,19 +95,24 @@ if (isSomeFunction!fnc && isFuncValidB!(fnc, typeof(result)))
         return result.value;
 }
 
+// TODO: maybe rename this to `on_error`
 T unwrap_or_else(alias fnc, E, T)(Result!(E, T) result, string file = __FILE__, size_t line = __LINE__)
 if (!isSomeFunction!fnc && isFuncValidB!(fnc, typeof(result)))
 {
     return unwrap_or_else!(fnc!(typeof(result)), E, T)(result, file, line);
 }
 
-void throw_on_error(E, T)(Result!(E, T) res, string file = __FILE__, size_t line = __LINE__)
+void throw_on_error_(E, T)(Result!(E, T) res, string file = __FILE__, size_t line = __LINE__)
 {
     throw new Exception(res.error.to_error_msg(), file, line);
 }
 
-T unwrap(E, T)(Result!(E, T) result, string file = __FILE__, size_t line = __LINE__)
-    => result.unwrap_or_else!(throw_on_error!(E, T), E, T)(file, line);
+T throw_on_error(E, T)(Result!(E, T) result, string file = __FILE__, size_t line = __LINE__)
+    => result.unwrap_or_else!(throw_on_error_!(E, T), E, T)(file, line);
+
+// Trust that the result is not an error. Or ignore them
+T trust(E, T)(Result!(E, T) result) if (is(T == void)) => cast(void)result;
+T trust(E, T)(Result!(E, T) result) if (!is(T == void)) => result.T;
 
 // Maybe use core.stdc.assert
 /* T unwrap_or_assert(T)(GLResult!T res, string file = __FILE__, size_t line = __LINE__) */

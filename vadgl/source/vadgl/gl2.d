@@ -111,6 +111,10 @@ template gl_wrap(alias fnc_)
     else
         alias fnc = fnc_;
 
+    static assert(isSomeFunction!fnc, "`fnc_` must be a function");
+
+    enum string func_name = __traits(identifier, fnc);
+
     alias T = ReturnType!fnc;
     alias ErrorType = InternalError;
     alias ResultT = Result!(ErrorType, T);
