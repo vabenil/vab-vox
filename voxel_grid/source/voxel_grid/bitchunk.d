@@ -14,13 +14,14 @@ in(index < (data.length << 3))
     => cast(bool)bt(cast(size_t*)data.ptr, index);
 
 @trusted @nogc nothrow
-static bool set_bit(ubyte[] data, size_t index, bool value)
+static ubyte set_bit(ubyte[] data, size_t index, bool value)
 in(index < (data.length << 3))
-    => cast(bool)(
+    => cast(ubyte)(
         value
             ? bts(cast(size_t*)data.ptr, index)
             : btr(cast(size_t*)data.ptr, index)
-    );
+        );
+
 // If using statically magnitude must be less than 8
 // 1 Bit chunk
 struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
@@ -41,16 +42,11 @@ struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
     ubyte[voxel_count >> 3] data;
     /* ubyte[] data; */
 
-    this(uint dim)
-    {
-        /* this.data = new ubyte[voxel_count >> 3]; */
-    }
-
-    bool in_bounds(int x, int y, int z)
+    bool in_bounds(int x, int y, int z) const pure
         => (x >= 0 && y >= 0 && z >= 0 &&
             x < DIM && y < DIM && z < DIM);
 
-    size_t to_index(uint x, uint y, uint z) => to_index_(x, y, z, magnitude);
+    size_t to_index(uint x, uint y, uint z) const pure => to_index_(x, y, z, magnitude);
 
     // TODO: I could probably put `in_bounds` check this into an `in` contract
     // Since getting a voxel outside of range should either just be an error
@@ -66,10 +62,19 @@ struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
 
     void set_voxel(uint cx, uint cy, uint cz, VoxelType voxel)
     {
-        import std.stdio;
         if (this.in_bounds(cx, cy, cz))
             data.set_bit(to_index(cx, cy, cz), cast(bool)voxel);
     }
+
+    VoxelType opIndex(uint cx, uint cy, uint cz) const
+    in (this.in_bounds(cx, cy, cz))
+    {
+        return VoxelType(data.get_bit(to_index(cx, cy, cz)));
+    }
+
+    VoxelType opIndex(int[3] p) const => this[p[0], p[1], p[2]];
+
+    VoxelType opIndex(uint index) const => VoxelType(data.get_bit(index));
 
     size_t size() const pure => voxel_count >> 3;
 }
@@ -93,12 +98,11 @@ struct BitVoxel
 unittest
 {
     import std.stdio;
-    alias BitChunk(uint magnitude=4) = VoxelBitChunk!(BitVoxel, magnitude);
     enum size_t MAG = 7;
     enum size_t DIM = 1 << MAG;
+    alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
 
-    alias Chunk = BitChunk!MAG;
-    Chunk chunk = Chunk(MAG);
+    BitChunk chunk;
 
     chunk.set_voxel(3, 0, 0, BitVoxel(true));
     chunk.set_voxel(0, 3, 0, BitVoxel(true));
@@ -127,5 +131,5 @@ unittest
             writeln("BitChunk!", MAG, ".sizeof = ", chunk.size / 0x400, " KB");
     }
     else writeln("BitChunk!", MAG, ".sizeof = ", chunk.size, " B");
-    writeln("Chunk(", DIM, "x", DIM, "x", DIM, ") Voxel count = ", Chunk.voxel_count);
+    writeln("BitChunk(", DIM, "x", DIM, "x", DIM, ") Voxel count = ", BitChunk.voxel_count);
 }
