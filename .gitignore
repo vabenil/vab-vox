@@ -18,6 +18,7 @@ vox_engine-test-*
 
 common/*.a
 common/*.lib
+common/libvox_engine_common.a
 
 vadgl/*.a
 vadgl/*.lib
