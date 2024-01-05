@@ -37,14 +37,17 @@ struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
     alias VoxelType = VoxelT;
     enum uint size = 1 << chunk_magnitude;
     enum uint magnitude = chunk_magnitude;
+    enum uint voxel_count = 1 << (magnitude * 3);
 
     VoxelType[1 << (magnitude * 3)] data;
 
-    bool in_bounds(int x, int y, int z)
+    bool in_bounds(int x, int y, int z) const pure
         => (x >= 0 && y >= 0 && z >= 0 &&
             x < size && y < size && z < size);
 
-    size_t to_index(uint x, uint y, uint z) => to_index_(x, y, z, magnitude);
+    bool in_bounds(const int[3] p) const pure => in_bounds(p[0], p[1], p[2]);
+
+    size_t to_index(uint x, uint y, uint z) const pure => to_index_(x, y, z, magnitude);
 
     Nullable!VoxelType get_voxel(uint cx, uint cy, uint cz)
     {
@@ -58,6 +61,16 @@ struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
     {
         data[to_index(cx, cy, cz)] = voxel;
     }
+
+    ref inout(VoxelType) opIndex(uint x, uint y, uint z) inout return
+    in (this.in_bounds(x, y, z))
+    {
+        return data[to_index(x, y, z)];
+    }
+
+    ref inout(VoxelType) opIndex(int[3] p) inout return => this[p[0], p[1], p[2]];
+
+    ref inout(VoxelType) opIndex(uint index) inout return => data[index];
 }
 
 alias Chunk = VoxelChunk!Voxel;
