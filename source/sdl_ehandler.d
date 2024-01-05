@@ -66,27 +66,27 @@ struct SDL_EHandler
 
     // TODO: A must be type SDL_Event so just use that
     @trusted
-    void add_handler(A, B)(string event, void delegate(A*, B*) func)
+    void add_handler(B)(string event, void delegate(SDL_Event*, B*) func)
     {
         add_handler_(event, func);
     }
 
     @trusted
-    void add_handler(A, B)(string event, void function(A*, B*) func)
+    void add_handler(B)(string event, void function(SDL_Event*, B*) func)
     {
         add_handler_(event, func);
     }
 
     @trusted
-    void add_handler(A)(string event, void function(A*) func)
+    void add_handler(string event, void function(SDL_Event*) func)
     {
-        add_handler!(A, void)(event, (A* e, void *) => func(e));
+        add_handler!(void)(event, (SDL_Event* e, void *) => func(e));
     }
 
     @trusted
-    void add_handler(A)(string event, void delegate(A*) func)
+    void add_handler(string event, void delegate(SDL_Event*) func)
     {
-        add_handler!(A, void)(event, (A* e, void *) => func(e));
+        add_handler!(void)(event, (SDL_Event* e, void *) => func(e));
     }
 
     @safe
@@ -101,6 +101,7 @@ struct SDL_EHandler
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             ehandler.trigger_handlers("any", &e, user_data); // always trigger
+            // TODO: Check if event is valid and throw if not
             ehandler.trigger_handlers(sdl_event_to_str(e.type), &e, user_data);
         }
     }
