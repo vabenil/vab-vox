@@ -18,6 +18,7 @@
         "./common/",
         "./voxel_grid/",
         "./vadgl/",
+        "./voxel_renderer/",
         "./nuklear/"
     ],
     "description": "A fast Voxel engine in D",
