@@ -7,12 +7,12 @@
         {
             "name": "unittest",
             "dependencies": {
-                "inmath": "~>1.0.5"
+                "inmath": "~>1.0.5",
+                "bindbc-sdl": "~>1.4.2"
             }
         }
     ],
     "dependencies": {
-        "bindbc-sdl": "~>1.4.2",
         "bindbc-opengl": "~>1.1.0",
 
         "vox_engine:common": { "path": "./common" },
