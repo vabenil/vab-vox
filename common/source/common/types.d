@@ -52,6 +52,16 @@ struct Vector(BT, size_t N) if (isNumeric!BT && N <= 4)
         this.array = [args];
     }
 
+    bool opEquals(This b) const pure
+    {
+        bool is_equal = true;
+
+        static foreach (i; 0..N)
+            is_equal = is_equal && (this[i] == b[i]);
+
+        return is_equal;
+    }
+
     BT opIndex(long i) const pure => this.array[i];
 
     // TODO: It may be better to use this.array[] += v.array[]
