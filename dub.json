@@ -7,6 +7,7 @@
     "dependencies": {
         "vox_engine:common": "*",
         "vox_engine:voxel_grid": "*",
+        "vox_engine:voxel_renderer": "*",
         "vox_engine:vadgl": "*",
         "vox_engine:nuklear": "*",
 
@@ -31,8 +32,9 @@
     },
     "versions": [
         "SDL_205",
-        "GL_32",
+        "GL_42",
         "NK_ALL",
-        "BindNuklear_Static"
+        "BindNuklear_Static",
+        "commented__VADGL_DebugGLCalls"
     ]
 }
