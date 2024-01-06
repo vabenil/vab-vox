@@ -37,6 +37,14 @@ struct CapedArray(ElementType, uint capacity)
         this.array[0..array_.length] = array_;
     }
 
+    int find(E value)
+    {
+        foreach (int i, const(E) val; this)
+            if (val == value)
+                return i;
+        return -1;
+    }
+
     // Will return false if operation failed
     @safe @nogc nothrow
     bool append(E value)
