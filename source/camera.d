@@ -1,4 +1,4 @@
-module test.camera;
+module camera;
 
 import inmath;
 import inmath.math;
