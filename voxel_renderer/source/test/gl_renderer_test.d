@@ -58,7 +58,6 @@ unittest
 
     void on_key_press(SDL_Event *e)
     {
-        import std.stdio;
         SDL_Keysym keysym = e.key.keysym;
         auto mod = keysym.mod;
 
@@ -115,14 +114,17 @@ unittest
     auto renderer = new VoxelRenderer!MChunk(device);
 
     MChunk chunk;
+    /* MChunk chunk2; */
     foreach (j; 0..MChunk.size) {
         foreach (i; 0..MChunk.size) {
             auto color = Color4b(cast(ubyte)((i+1) * 8), cast(ubyte)((j+1) * 8), 0);
             chunk[i, 0, j] = Voxel(color.to_hex);
+            /* chunk2[i, 0, j] = Voxel(color.to_hex); */
         }
     }
 
     renderer.commit_chunk(chunk, IVec3(0, 0, 0));
+    /* renderer.commit_chunk(chunk2, IVec3(1, 0, 0)); */
     renderer.send_to_device();
 
     SDL_EHandler event_handler;
@@ -139,9 +141,8 @@ unittest
         /* camera.set_direction(); */
         camera.look_at();
 
-        /* writeln(camera.proj); */
         device.set_mpv_matrix(camera.mpv(), true);
-        renderer.render();
+        /* renderer.render_chunk(IVec3(0, 0, 0)); */
         /* renderer.get_device().render(); */
         win.swap_buffer();
     }
