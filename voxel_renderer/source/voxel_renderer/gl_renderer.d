@@ -82,6 +82,18 @@ struct MeshContainer
         /*     // for this gotta assume whole thing is unsorted */
         /* } */
 
+        int find(ivec3 pos)
+        {
+            for (int i = 0; i < this.count; i++) {
+                if (this.free_headers.find(cast(byte)i) != -1)
+                    continue; // if this value is freed it doesn't count
+
+                if (this.coords[i] == pos)
+                    return i; // found
+            }
+            return -1;
+        }
+
         void swap(int chunk0_i, int chunk1_i)
         {
             ChunkInfo tmp = this[chunk0_i];
@@ -183,11 +195,13 @@ struct MeshContainer
         this.header.coords[header_id] = chunk_pos;
         // new chunk starts at end of previous chunk
         this.header.indices[header_id] = mem_start;
-        this.header.sizes[header_id] = buff_size; // we don't know size until we create mesh
+        this.header.sizes[header_id] = this.buff_size; // we don't know size until we create mesh
 
         face_meshes ~= tmp_chunk_buffer[0..buff_size];
 
         assert(face_meshes.length <= max_face_count);
+
+        this.buff_size = 0; // Reset tmp buffer
 
         return header_id;
     }
@@ -241,7 +255,8 @@ class VoxelRenderer(ChunkT)
 
         **Solution**: Use a hybrid of dynamic and static
    */
-    private MeshContainer mesh_buffer;
+    MeshContainer mesh_buffer;
+    /* private MeshContainer mesh_buffer; */
     private GLDevice device;
 
     this(GLDevice device)
@@ -317,7 +332,27 @@ class VoxelRenderer(ChunkT)
     }
 
     void render() => device.render(cast(int)this.mesh_buffer.face_meshes.length);
-    void render_chunk(ivec3 cpos) => device.render();
+
+    /* void render(uint start, uint count) => device.render(start, count); */
+
+    void render_chunk(ivec3 cpos)
+    {
+        int id = this.mesh_buffer.header.find(cpos);
+        assert(id != -1);
+
+        auto info = this.mesh_buffer.header[id];
+        /* import std.stdio; */
+        /* writeln(this.mesh_buffer.face_meshes[info.index]); */
+        // send uniform
+        this.device.set_chunk_pos(cpos);
+        this.device.set_chunk_size(ChunkT.size);
+        this.device.render(info.index, info.size);
+    }
+
+    // Render multiple chunks
+    void render_chunks(ivec3[] chunk_positions)
+    {
+    }
 
     void flush() {}
 }

@@ -17,6 +17,8 @@ static immutable string vertex_source = q{
     layout(location=2) in vec4 color;
     layout(location=3) in uint packed_size;
 
+    uniform int u_chunk_size;
+    uniform ivec3 u_chunk_pos;
     uniform mat4 u_trans_mat;
 
     out vec4 v_color;
@@ -37,7 +39,8 @@ static immutable string vertex_source = q{
         sbit = uint(face_id > 2u);
 
         vec3 delta = vec3(uvec3(identity[dim]) & sbit);
-        vec3 face_pos = vec3(pos) + delta;
+        /* vec3 face_pos = vec3( pos) + delta; */
+        vec3 face_pos = vec3(u_chunk_pos * u_chunk_size + pos) + delta;
 
         // Model position to 3d
         vec3 m_pos = vec3(0);
@@ -53,7 +56,6 @@ static immutable string vertex_source = q{
         vec3 w_pos = get_world_pos();
 
         v_color = color;
-        /* v_color = vec4(1, 6.0f / (6.0f - float(int(packed_size))), 1, 1); */
         v_pos = w_pos;
         /* gl_Position =  vec4(w_pos, 1) * u_trans_mat; */
         gl_Position =  u_trans_mat * vec4(w_pos, 1);
@@ -181,6 +183,12 @@ class GLDevice : VoxelDevice
     void set_mpv_matrix(const(float[4][4]) mat, bool normalize=false)
         => set_mpv_matrix(cast(const(float[16]))mat, normalize);
 
+    void set_chunk_pos(ivec3 chunk_pos)
+        => uniforms["u_chunk_pos"].set_v(chunk_pos.array).throw_on_error();
+
+    void set_chunk_size(int size)
+        => uniforms["u_chunk_size"].set(size).throw_on_error();
+
     void set_camera(vec3 pos, vec3 dir, vec3 up) {}
 
     void enable_gl_settings()
@@ -232,6 +240,8 @@ class GLDevice : VoxelDevice
         enum uint vertex_size = 20;
 
         uniforms["u_trans_mat"] = GLUniform.from_name("u_trans_mat", program.id).throw_on_error();
+        uniforms["u_chunk_size"] = GLUniform.from_name("u_chunk_size", program.id).throw_on_error();
+        uniforms["u_chunk_pos"] = GLUniform.from_name("u_chunk_pos", program.id).throw_on_error();
 
         attributes = [
             "model_pos": glattribute!gl_ivec2(loc: AttribLoc.MODEL_POS, offset_: 0),
@@ -286,42 +296,50 @@ class GLDevice : VoxelDevice
         }
     }
 
-    /*
-        TODO: Probably best idea is to make a big buffer to store
-        meshes for multiple buffers and then draw slices of the buffer
-   */
-    void send_to_device()
-    {
-        vbo.bind().throw_on_error();
-        vbo.set_data(this.buffer, GL_STATIC_DRAW).throw_on_error();
-    }
-
     void send_to_device(void[] buff)
     {
         vbo.bind().throw_on_error();
         vbo.set_data(buff, GL_STATIC_DRAW).throw_on_error();
+        vbo.disable();
     }
+
+    /*
+        TODO: Probably best idea is to make a big buffer to store
+        meshes for multiple buffers and then draw slices of the buffer
+   */
+    void send_to_device() => this.send_to_device(this.buffer);
 
     void clear_buffer() { this.buffer.length = 0; }
     // TODO: Perhaps add a way to clear the buffer
 
-    void render(int count)
+    /* NOTE: This coule be used to render multiple chunks more efficiently
+       I don't know the difference between this 2 functions
+        - glMultiDrawElementsIndirect
+        - glDrawElementsIndirect
+    */
+    void multi_render()
+    {
+        assert(0, "Not implmeented yet");
+    }
+
+    void render(uint start, uint count)
     {
         import std.stdio;
-
         enable_gl_settings();
         program.use().throw_on_error();
 
         vao.bind().throw_on_error();
 
-        // NOTE: This is not optimal at all, change this
-        /* vbo.set_data(this.buffer, GL_STATIC_DRAW).throw_on_error(); */
-
-        gl_draw_elements_instanced(GL_TRIANGLES, 6, GLType.UINT, null, count)
-            .throw_on_error();
+        // Use this function
+        gl_wrap!glDrawElementsInstancedBaseInstance(
+            GL_TRIANGLES, 6, GLType.UINT, null, count, start,
+        ).throw_on_error();
+        /* gl_draw_elements_instanced(GL_TRIANGLES, 6, GLType.UINT, null, count) .throw_on_error(); */
 
         vao.disable();
     }
+
+    void render(uint count) => render(0u, count);
 
     void render() { this.render(cast(int)this.face_count); }
 }
