@@ -15,8 +15,8 @@
     "dependencies": {
         "bindbc-opengl": "~>1.1.0",
 
-        "vox_engine:common": { "path": "./common" },
-        "vox_engine:voxel_grid": { "path": "./voxel_grid" },
-        "vox_engine:vadgl": { "path": "./vadgl" }
+        "vox_engine:common": "*",
+        "vox_engine:voxel_grid": "*",
+        "vox_engine:vadgl": "*"
     }
 }
