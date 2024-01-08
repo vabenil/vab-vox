@@ -22,11 +22,11 @@ private template isSameType(Args...)
         static immutable bool isSameType = false;
 }
 
-struct Vector(BT, size_t N) if (isNumeric!BT && N <= 4)
+struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
 {
     alias This = Vector!(BT, N);
     alias BaseType = BT;
-    enum size_t dimensions = N;
+    enum ulong dimensions = N;
 
     enum string[] symbols = ["x", "y", "z", "w"];
 
@@ -89,7 +89,11 @@ struct Vector(BT, size_t N) if (isNumeric!BT && N <= 4)
         }
     }
 
-    // TODO: Implement mathematical operations
+    ulong toHash() const @safe nothrow
+    {
+        // TODO: I for sure can come up with a better hash function
+        return typeid(BT[N]).getHash(&this);
+    }
 }
 
 unittest
