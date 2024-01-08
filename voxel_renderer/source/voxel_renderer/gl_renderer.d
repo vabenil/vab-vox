@@ -28,6 +28,8 @@ private enum int[3][3] mat3_identity = [
 enum size_t MAG  = 5;
 alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
 
+enum ubyte NULL_ID = 255;
+
 // safe as long as data can store enough bits to fit index
 @nogc nothrow
 static ubyte set_bit(ubyte* data, size_t index, bool value)
@@ -63,15 +65,15 @@ struct MeshContainer
     {
         // I don't expect more than 128 chunks
         // store information of all chunks
-        byte count = 0;
+        ubyte count = 0;
         // Chunk coordinates
-        ivec3[128] coords = void;
+        ivec3[255] coords = void;
         // Units in voxel faces
-        int[128] indices = 0;
-        int[128] sizes = 0;
+        int[255] indices = 0;
+        int[255] sizes = 0;
 
         // Free positions in header (chunks that can be overriden)
-        CapedArray!(byte, 128) free_headers; // use as a list
+        CapedArray!(ubyte, 255) free_headers; // use as a list
 
         // Implement this later
         // Sort by proximity to camera
@@ -85,13 +87,13 @@ struct MeshContainer
         int find(ivec3 pos)
         {
             for (int i = 0; i < this.count; i++) {
-                if (this.free_headers.find(cast(byte)i) != -1)
+                if (this.free_headers.find(cast(ubyte)i) != -1)
                     continue; // if this value is freed it doesn't count
 
                 if (this.coords[i] == pos)
                     return i; // found
             }
-            return -1;
+            return NULL_ID;
         }
 
         void swap(int chunk0_i, int chunk1_i)
@@ -102,19 +104,19 @@ struct MeshContainer
             this[chunk1_i] = tmp;
         }
 
-        bool full() const pure => (count == 128) && (free_headers.length == 0);
+        bool full() const pure => (count == ubyte.max-1) && (free_headers.length == 0);
 
         // Returns index to empty space and remove empty space
-        byte take_empty() in (!this.full())
+        ubyte take_empty() in (!this.full())
         {
             if (free_headers.length) {
                 // pop!
-                byte index = free_headers[$-1];
+                ubyte index = free_headers[$-1];
                 free_headers._length--;
                 return index;
             }
             // push
-            return cast(byte)(count++);
+            return cast(ubyte)(count++);
         }
 
         // Can fail
@@ -174,7 +176,8 @@ struct MeshContainer
     // Append to tmp chunk
     void push_face(VoxelVertex face)
     {
-        tmp_chunk_buffer[buff_size++] = face;
+        if (buff_size < tmp_chunk_buffer.length)
+            tmp_chunk_buffer[buff_size++] = face;
     }
 
     void clean_tmp() { tmp_chunk_buffer.length = 0; }
@@ -182,18 +185,22 @@ struct MeshContainer
     // Adds a chunk to the header and return index of header
     // Also add chunk to vertex buffer
     // IMPORTANT: This function doesn't check whether is already in header
-    byte push_chunk(ivec3 chunk_pos)
+    ubyte push_chunk(ivec3 chunk_pos)
     {
+        import std.stdio;
         // out of memory
-        assert(!this.header.full());
+        if (this.header.full()) {
+            writeln("Out of memory");
+            return NULL_ID;
+        }
+        /* assert(!this.header.full()); */
 
-        byte header_id = this.header.take_empty();
+        ubyte header_id = this.header.take_empty();
         int mem_start = this.memstore.take_mem(this.buff_size);
 
         assert(mem_start >= 0);
 
         this.header.coords[header_id] = chunk_pos;
-        // new chunk starts at end of previous chunk
         this.header.indices[header_id] = mem_start;
         this.header.sizes[header_id] = this.buff_size; // we don't know size until we create mesh
 
@@ -263,7 +270,7 @@ class VoxelRenderer(ChunkT)
     {
         enum int chunk_size = ChunkT.voxel_count * 6 / 2;
         this.device = device;
-        this.mesh_buffer = MeshContainer(8, chunk_size);
+        this.mesh_buffer = MeshContainer(12, chunk_size);
     }
 
     VoxelDevice get_device() => device;
@@ -286,7 +293,6 @@ class VoxelRenderer(ChunkT)
     // TODO: Use Bit chunk here
     void commit_voxel_faces_(ref const ChunkT chunk, ivec3 pos)
     {
-        import std.stdio;
         VoxelT voxel = chunk[pos.array];
         if (voxel.data == 0)
             return; // voxel is empty
@@ -308,6 +314,7 @@ class VoxelRenderer(ChunkT)
         }
     }
 
+    // Create meshes
     void commit_chunk(ref const ChunkT chunk, ivec3 cpos)
     {
         for (int k = 0; k < ChunkT.size; k++)
@@ -337,8 +344,13 @@ class VoxelRenderer(ChunkT)
 
     void render_chunk(ivec3 cpos)
     {
+        import std.stdio;
         int id = this.mesh_buffer.header.find(cpos);
-        assert(id != -1);
+
+        if (id == NULL_ID) {
+            return;
+        }
+        /* assert(id != -1); */
 
         auto info = this.mesh_buffer.header[id];
         /* import std.stdio; */

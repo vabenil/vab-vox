@@ -277,7 +277,7 @@ class GLDevice : VoxelDevice
 
         vao.disable(); // ALWAYS unbind vao first
 
-        gl_clear_color(1.0, 1.0, 1.0f, 1.0f);
+        /* gl_clear_color(1.0, 1.0, 1.0f, 1.0f); */
     }
 
     void commit_face(ivec3 pos, Color4b color, uint face_id, uint material)

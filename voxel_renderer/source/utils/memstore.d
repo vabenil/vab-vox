@@ -6,6 +6,8 @@ import std.typecons : Tuple, tuple;
 import utils.bytelist;
 
 
+private enum ubyte NULL_ID = 255;
+
 private T max(T)(T a, T b) pure if (isNumeric!T) => (a > b) ? a : b;
 private alias MemRange = Tuple!(int, "start", int, "end");
 
@@ -15,13 +17,14 @@ struct MemStore
 {
     int count = 0;
     // contains free spaces;
-    MemRange[128] free_space_buffer = void;
+    MemRange[254] free_space_buffer = void;
     // TODO: remove value, uncessary memory
     // contains indices to free space
-    ByteList!128 free_space_list;
+    ByteList!254 free_space_list;
+
 
     // Just another alias
-    ref inout(ByteList!128) list() return inout => this.free_space_list;
+    ref inout(ByteList!254) list() return inout => this.free_space_list;
 
     this(int mem_size)
     {
@@ -31,7 +34,7 @@ struct MemStore
 
     void push(MemRange mem)
     {
-        byte id = this.list.push_front(cast(byte)count++);
+        ubyte id = this.list.push_front(cast(ubyte)count++);
         this.free_space_buffer[id] = mem;
     }
 
@@ -49,8 +52,8 @@ struct MemStore
     int take_mem(int size) // all units in voxel_faces
     {
         NodeInfo info = find_free_space(size);
-        if (info.index == -1)
-            return -1; // no free space found
+        if (info.index == NULL_ID)
+            return NULL_ID; // no free space found
 
         MemRange* range = &free_space_buffer[info.current];
         int start = range.start;
@@ -63,9 +66,9 @@ struct MemStore
     }
 
     // Insert free memory in 
-    byte sorted_insert(MemRange range)
+    ubyte sorted_insert(MemRange range)
     {
-        byte index = this.list.count;
+        ubyte index = this.list.count;
         foreach (NodeInfo info; this.list) {
             MemRange* free_mem = &this.free_space_buffer[info.current];
 
@@ -76,7 +79,7 @@ struct MemStore
             }
         }
 
-        byte id = this.list.insert(index, 0);
+        ubyte id = this.list.insert(index, 0);
         this.free_space_buffer[id] = range;
 
         return index;
@@ -98,24 +101,24 @@ struct MemStore
         foreach (NodeInfo info; this.list) {
             current = &this.free_space_buffer[info.current];
 
-            if (info.prev != -1)
+            if (info.prev != NULL_ID)
                 prev = &this.free_space_buffer[info.prev];
 
-            if (info.next != -1)
+            if (info.next != NULL_ID)
                 next = &this.free_space_buffer[info.next];
 
             // First delete next if need then delete prev, so that index
             // doesn't affect the operation
-            if (info.next != -1 && current.end >= next.start) {
+            if (info.next != NULL_ID && current.end >= next.start) {
                 current.end = .max(current.end, next.end);
-                this.list.remove(cast(byte)(info.index+1));
+                this.list.remove(cast(ubyte)(info.index+1));
             }
             // Since list is sorted prev is less than current
-            if (info.prev != -1 && prev.end >= current.start) { // adjacent to the left
+            if (info.prev != NULL_ID && prev.end >= current.start) { // adjacent to the left
                 current.start = prev.start;
                 current.end = .max(prev.end, current.end);
                 // Deleting prev and next is theoretically safe... I think
-                this.list.remove(cast(byte)(info.index-1));
+                this.list.remove(cast(ubyte)(info.index-1));
             }
         }
     }
