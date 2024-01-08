@@ -5,21 +5,21 @@ import std.typecons     : Nullable, nullable;
 import core.bitop       : bt, btr, bts;
 
 @safe @nogc nothrow pure
-static size_t to_index_(uint x, uint y, uint z, ubyte magnitude)
+static ulong to_index_(uint x, uint y, uint z, ubyte magnitude)
     => x + (y << magnitude) + (z << (magnitude << 1));
  
 @trusted @nogc nothrow pure
-static bool get_bit(const(ubyte[]) data, size_t index)
+static bool get_bit(const(ubyte[]) data, ulong index)
 in(index < (data.length << 3))
-    => cast(bool)bt(cast(size_t*)data.ptr, index);
+    => cast(bool)bt(cast(ulong*)data.ptr, index);
 
 @trusted @nogc nothrow
-static ubyte set_bit(ubyte[] data, size_t index, bool value)
+static ubyte set_bit(ubyte[] data, ulong index, bool value)
 in(index < (data.length << 3))
     => cast(ubyte)(
         value
-            ? bts(cast(size_t*)data.ptr, index)
-            : btr(cast(size_t*)data.ptr, index)
+            ? bts(cast(ulong*)data.ptr, index)
+            : btr(cast(ulong*)data.ptr, index)
         );
 
 // If using statically magnitude must be less than 8
@@ -27,9 +27,9 @@ in(index < (data.length << 3))
 struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
 {
     alias VoxelType = VoxelT;
-    enum size_t DIM = 1L << chunk_magnitude;
-    enum size_t magnitude = chunk_magnitude;
-    enum size_t voxel_count = 1L << (magnitude * 3);
+    enum ulong DIM = 1L << chunk_magnitude;
+    enum ulong magnitude = chunk_magnitude;
+    enum ulong voxel_count = 1L << (magnitude * 3);
 
     /*
        So Here I got 2 choices.
@@ -46,7 +46,7 @@ struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
         => (x >= 0 && y >= 0 && z >= 0 &&
             x < DIM && y < DIM && z < DIM);
 
-    size_t to_index(uint x, uint y, uint z) const pure => to_index_(x, y, z, magnitude);
+    ulong to_index(uint x, uint y, uint z) const pure => to_index_(x, y, z, magnitude);
 
     // TODO: I could probably put `in_bounds` check this into an `in` contract
     // Since getting a voxel outside of range should either just be an error
@@ -76,7 +76,7 @@ struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
 
     VoxelType opIndex(uint index) const => VoxelType(data.get_bit(index));
 
-    size_t size() const pure => voxel_count >> 3;
+    ulong size() const pure => voxel_count >> 3;
 }
 
 struct BitVoxel
@@ -98,8 +98,8 @@ struct BitVoxel
 unittest
 {
     import std.stdio;
-    enum size_t MAG = 7;
-    enum size_t DIM = 1 << MAG;
+    enum ulong MAG = 7;
+    enum ulong DIM = 1 << MAG;
     alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
 
     BitChunk chunk;

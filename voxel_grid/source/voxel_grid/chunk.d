@@ -25,7 +25,7 @@ enum bool isChunk(T) =
 
 
 @safe @nogc nothrow pure
-static size_t to_index_(uint x, uint y, uint z, ubyte magnitude)
+static ulong to_index_(uint x, uint y, uint z, ubyte magnitude)
     => x + (y << magnitude) + (z << (magnitude << 1));
 
 struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
@@ -47,7 +47,7 @@ struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
 
     bool in_bounds(const int[3] p) const pure => in_bounds(p[0], p[1], p[2]);
 
-    size_t to_index(uint x, uint y, uint z) const pure => to_index_(x, y, z, magnitude);
+    ulong to_index(uint x, uint y, uint z) const pure => to_index_(x, y, z, magnitude);
 
     Nullable!VoxelType get_voxel(uint cx, uint cy, uint cz)
     {

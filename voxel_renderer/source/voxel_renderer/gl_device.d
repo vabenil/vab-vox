@@ -160,7 +160,7 @@ class GLDevice : VoxelDevice
 
     void[] buffer;
     private {
-        size_t face_count = 0;
+        ulong face_count = 0;
         // This uses GC. Dont use GC
 
         VArrayObject vao;

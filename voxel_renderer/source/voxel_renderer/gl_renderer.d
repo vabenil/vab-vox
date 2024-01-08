@@ -25,19 +25,19 @@ private enum int[3][3] mat3_identity = [
     [0, 0, 1],
 ];
 
-enum size_t MAG  = 5;
+enum ulong MAG  = 5;
 alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
 
 enum ubyte NULL_ID = 255;
 
 // safe as long as data can store enough bits to fit index
 @nogc nothrow
-static ubyte set_bit(ubyte* data, size_t index, bool value)
+static ubyte set_bit(ubyte* data, ulong index, bool value)
 /* in(index < (data.length << 3)) */
     => cast(ubyte)(
             value
-                ? bts(cast(size_t*)data, index)
-                : btr(cast(size_t*)data, index)
+                ? bts(cast(ulong*)data, index)
+                : btr(cast(ulong*)data, index)
         );
 
 private alias MemRange = Tuple!(int, "start", int, "end");
@@ -139,7 +139,7 @@ struct MeshContainer
             return value;
         }
 
-        int opDollar(size_t _) const pure => this.count;
+        int opDollar(ulong _) const pure => this.count;
     }
 
     /*
@@ -224,7 +224,7 @@ struct MeshContainer
 
     bool append_chunk(int face_count, VoxelVertex[] buffer); // TODO: Implement
 
-    size_t vertex_buffer_size() const pure => face_meshes.length * VoxelVertex.sizeof;
+    ulong vertex_buffer_size() const pure => face_meshes.length * VoxelVertex.sizeof;
 
     void[] get_buffer() const => cast(void[])this.face_meshes;
 
