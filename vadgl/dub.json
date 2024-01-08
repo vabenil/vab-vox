@@ -8,14 +8,7 @@
 	"dependencies": {
 		"bindbc-opengl": "~>1.1.0"
 	},
-	"subConfigurations": {
-		"bindbc-sdl": "staticBC"
-	},
-	"libs": [
-		"SDL2"
-	],
 	"versions": [
-		"SDL_205",
 		"GL_33"
 	]
 }
