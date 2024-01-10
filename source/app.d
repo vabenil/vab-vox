@@ -18,7 +18,7 @@ import voxel_grid.voxel;
 import voxel_renderer.gl_renderer;
 import voxel_renderer.gl_device;
 
-alias MChunk = VoxelChunk!(Voxel, 5);
+alias MChunk = VoxelChunk!(Voxel, 6);
 
 struct GState
 {
@@ -107,8 +107,8 @@ void init_globals()
     gstate.camera.look_at(); // calculate view matrix
 
     /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
-    gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox");
-    /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
+    /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
+    gstate.world.load_from_vox_file("./assets/realistic_terrain.vox");
     /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
     /* gstate.world.load_from_vox_file("./assets/11.vox"); */
 
@@ -139,6 +139,10 @@ void init_graphics()
 void main_loop()
 {
     import vadgl;
+    import std.datetime.stopwatch;
+
+    int ticks = 1;
+    double duration_sum = 0;
 
     SDL_EHandler event_handler;
     event_handler.add_handler("quit", delegate(e) { gstate.quit = true; });
@@ -147,6 +151,8 @@ void main_loop()
     while (!gstate.quit) {
         event_handler.handle_sdl_events(&gstate);
 
+        StopWatch watch = StopWatch(AutoStart.no);
+        watch.start();
         gl_clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT).trust;
 
         /* camera.set_direction(); */
@@ -160,6 +166,13 @@ void main_loop()
         /* gstate.renderer.render_chunk(IVec3(1, 0, 0)); */
         /* renderer.get_device().render(); */
         gstate.win.swap_buffer();
+
+        watch.stop();
+        double avg_dur = duration_sum / ticks;
+        double fps = 1_000_000 / avg_dur; // don't count writeln
+        writeln(fps);
+        duration_sum += watch.peek.total!"usecs";
+        ticks++;
     }
 }
 void main()
