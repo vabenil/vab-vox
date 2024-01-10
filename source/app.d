@@ -18,12 +18,10 @@ import voxel_grid.voxel;
 import voxel_renderer.gl_renderer;
 import voxel_renderer.gl_device;
 
-alias MChunk = VoxelChunk!(Voxel, 6);
+alias MChunk = VoxelChunk!(Voxel, 5);
 
 struct GState
 {
-    /* enum int WINDOW_WIDTH = 600; */
-    /* enum int WINDOW_HEIGHT = 400; */
     /* enum int WINDOW_WIDTH = 960; */
     /* enum int WINDOW_HEIGHT = 540; */
     enum int WINDOW_WIDTH = 1152;
@@ -98,6 +96,24 @@ void on_key_down(SDL_Event* e)
     gstate.camera.pos += delta;
 }
 
+void init_globals()
+{
+    vec3 pos = vec3(15.0f, 8.0f, -15.0f);
+    vec3 target = vec3(15, 8.0f, 15); // look at second chunk
+
+    // set camera
+    gstate.camera = Camera(pos, 60.0f, gstate.WINDOW_WIDTH, gstate.WINDOW_HEIGHT);
+    gstate.camera.set_direction((target - gstate.camera.pos).normalized);
+    gstate.camera.look_at(); // calculate view matrix
+
+    /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
+    gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox");
+    /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
+    /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
+    /* gstate.world.load_from_vox_file("./assets/11.vox"); */
+
+}
+
 void init_graphics()
 {
     gstate.win = Window("Voxel engine", GState.WINDOW_WIDTH, GState.WINDOW_HEIGHT);
@@ -110,20 +126,8 @@ void init_graphics()
 
     gstate.renderer = new VoxelRenderer!MChunk(device);
 
-    /* MChunk chunk; */
-    /* MChunk chunk2; */
-    /* foreach (j; 0..MChunk.size) { */
-    /*     foreach (i; 0..MChunk.size) { */
-    /*         /1* auto color = Color4b(cast(ubyte)((i+1) * 8), cast(ubyte)((j+1) * 8), 0); *1/ */
-    /*         chunk[i, 0, j] = Voxel(Color4b.GREEN.to_hex); */
-    /*         chunk2[i, 0, j] = Voxel(Color4b.BLUE.to_hex); */
-    /*     } */
-    /* } */
 
-    /* gstate.renderer.commit_chunk(chunk, IVec3(0, 0, 0)); */
-    /* gstate.renderer.commit_chunk(chunk2, IVec3(1, 0, 0)); */
     foreach (pos, chunk; gstate.world) {
-        /* writeln("chunk_pos - ", pos); */
         gstate.renderer.commit_chunk(chunk, pos);
     }
 
@@ -160,23 +164,7 @@ void main_loop()
 }
 void main()
 {
-    vec3 pos = vec3(15.0f, 8.0f, 0.0f);
-    vec3 target = vec3(1.0f * MChunk.size, 0.0f, 0.0f); // look at second chunk
-
-    // set camera
-    gstate.camera = Camera(pos, 60.0f, gstate.WINDOW_WIDTH, gstate.WINDOW_HEIGHT);
-    gstate.camera.set_direction((target - gstate.camera.pos).normalized);
-    gstate.camera.look_at(); // calculate view matrix
-
-    /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
-    /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
-    /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
-    gstate.world.load_from_vox_file("./assets/Plane04.vox");
-    /* gstate.world.load_from_vox_file("./assets/11.vox"); */
-
-    writeln(gstate.camera.pitch, ", ", gstate.camera.yaw);
-    writefln("[%(%(%s, %),\n%)]", gstate.camera.view.matrix);
-
+    init_globals();
     init_graphics();
     main_loop();
 }
