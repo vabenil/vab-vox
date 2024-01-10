@@ -52,24 +52,15 @@ struct World(ChunkT)
         writefln("depth = %s", model.depth);
         writefln("That makes %s voxels total", model.numVoxels());
 
-        /* VoxColor color = model.voxel(0, 1, 2); */
-        /* writefln("voxel (0, 1, 2) has color (r = %s, g = %s, b = %s, a = %s)", color.r, color.g, color.b, color.a); */
         for (int k = 0; k < model.depth; k++)
         for (int j = 0; j < model.height; j++)
         for (int i = 0; i < model.width; i++) {
+        /* foreach (i; parallel(model.width.iota)) { */
             auto m_vox = model.voxel(i, j, k); // magica voxel
             Color4b color_ = Color4b(m_vox.r, m_vox.g, m_vox.b, m_vox.a);
             /* Color4b color = Color4b(m_vox.a, m_vox.b, m_vox.r, m_vox.g); */
             this[IVec3(i, k, j)] =  VoxelT(color_.to_hex());
         }
-        /* for (int k = 0; k < model.depth; k++) */
-        /* for (int j = 0; j < model.height; j++) */
-        /* foreach (i; parallel(model.width.iota)) { */
-        /*     auto m_vox = model.voxel(i, j, k); // magica voxel */
-        /*     Color4b color_ = Color4b(m_vox.r, m_vox.g, m_vox.b, m_vox.a); */
-        /*     /1* Color4b color = Color4b(m_vox.a, m_vox.b, m_vox.r, m_vox.g); *1/ */
-        /*     this[IVec3(i, k, j)] =  VoxelT(color_.to_hex()); */
-        /* } */
     }
 
     int opApply(int delegate(IVec3 cpos, ref ChunkT chunk) ops)
