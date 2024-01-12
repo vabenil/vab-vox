@@ -190,7 +190,9 @@ struct MeshContainer
         import std.stdio;
         // out of memory
         if (this.header.full()) {
-            writeln("Out of memory");
+            debug {
+                writeln("[WARNING]: Out of memory");
+            }
             return NULL_ID;
         }
         /* assert(!this.header.full()); */
