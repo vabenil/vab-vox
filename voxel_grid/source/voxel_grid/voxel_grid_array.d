@@ -25,9 +25,10 @@ NOTE: Using the octree indexing method could improve chunk copying performance
 Add the cost of making indexing slightly slower
 */
 
-class VoxelGridArray(ChunkType) : VoxelGridTmp!ChunkType
+class VoxelGridArray(ChunkT) : VoxelGridTmp!ChunkT
 {
     alias VoxelType = ChunkType.VoxelType;
+    alias ChunkType = ChunkT;
 
     ubyte magnitude;
     uint size;

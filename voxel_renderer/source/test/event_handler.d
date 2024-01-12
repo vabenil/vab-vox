@@ -1,5 +1,5 @@
-// NOTE: IMPORTANT: functions are stored as delegates and therefore use the GC
-// TODO: I could make this into a class
+module test.event_handler;
+
 struct EHandler
 {
     struct Callback

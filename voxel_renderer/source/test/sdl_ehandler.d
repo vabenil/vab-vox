@@ -1,4 +1,7 @@
-public import event_handler;
+module test.sdl_ehandler;
+
+public import test.event_handler;
+
 import bindbc.sdl;
 
 

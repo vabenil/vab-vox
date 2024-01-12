@@ -6,9 +6,10 @@ import voxel_grid.chunk;
 import std.typecons : Nullable;
 
 
-interface VoxelGridTmp(ChunkType) if (isChunk!ChunkType) 
+interface VoxelGridTmp(ChunkT) if (isChunk!ChunkT) 
 {
-    alias VoxelType = ChunkType.VoxelType;
+    alias VoxelType = ChunkT.VoxelType;
+    alias ChunkType = ChunkT;
 
     Nullable!VoxelType get_voxel(uint x, uint y, uint z);
     void set_voxel(uint x, uint y, uint z, Voxel voxel);

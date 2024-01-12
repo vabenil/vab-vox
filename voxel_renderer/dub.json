@@ -1,0 +1,23 @@
+{
+    "name": "voxel_renderer",
+    "targetType": "library",
+    "#versions": ["VADGL_DebugGLCalls"],
+    "versions": ["GL_42"],
+
+    "configurations": [
+        {
+            "name": "unittest",
+            "dependencies": {
+                "inmath": "~>1.0.5",
+                "bindbc-sdl": "~>1.4.2"
+            }
+        }
+    ],
+    "dependencies": {
+        "bindbc-opengl": "~>1.1.0",
+
+        "vox_engine:common": "*",
+        "vox_engine:voxel_grid": "*",
+        "vox_engine:vadgl": "*"
+    }
+}

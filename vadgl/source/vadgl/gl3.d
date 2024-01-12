@@ -18,6 +18,13 @@ version `VADGL_DisableChecks`:
 - Do not overcomplicate anything
 - Think about OpenGL support fucking later
 +/
+
+/*
+   // There is the phobos bug: https://issues.dlang.org/show_bug.cgi?id=23818
+   // this can be reproduced by placing the imports in the following order.
+   // Yes, this sucks, and the bug is honestly stupid
+
+   
 module vadgl.gl3;
 
 import std.bitmanip             : bitfields;
@@ -27,13 +34,31 @@ import std.meta                 : AliasSeq;
 
 import std.string               : toStringz;
 
-import std.algorithm            : endsWith;
+import std.algorithm            : endsWith, among;
 // OpenGL bindings
 import bindbc.opengl;
 
 import vadgl.types;
 import vadgl.error;
 import result;
+*/
+module vadgl.gl3;
+
+import std.conv                 : to;
+import std.format               : format;
+import std.meta                 : AliasSeq;
+
+// OpenGL bindings
+import bindbc.opengl;
+import vadgl.types;
+import vadgl.error;
+
+import std.string               : toStringz;
+
+import std.algorithm            : endsWith, among;
+
+import result;
+
 
 version (VADGL_EnableChecks) {
     enum bool checkGLCalls = true;
@@ -84,7 +109,7 @@ private template isGLSLBaseType(T)
 
 private template isGLVector(T)
 {
-    static if (is(T == V[N], V, size_t N)) {
+    static if (is(T == V[N], V, ulong N)) {
         static if (N <= 4)
             enum bool isGLVector = true;
         else
@@ -97,7 +122,7 @@ private template isGLVector(T)
 // Doesn't work with struct types
 private template TypeInfoGLSL(T)
 {
-    static if (is(T == Bm[Nm][Mm], Bm, size_t Nm, size_t Mm)) { // is matrix
+    static if (is(T == Bm[Nm][Mm], Bm, ulong Nm, ulong Mm)) { // is matrix
         // TODO: If size Nm or Mm is <=4 it's invalid
         static if (isGLSLBaseType!Bm) {
             alias TypeInfoGLSL = AliasSeq!("matrix", Bm, Nm, Mm);
@@ -106,7 +131,7 @@ private template TypeInfoGLSL(T)
             alias TypeInfoGLSL = AliasSeq!("invalid", void, 0, 0);
         }
     }
-    else static if (is(T == Bv[Nv], Bv, size_t Nv)) { // is vector
+    else static if (is(T == Bv[Nv], Bv, ulong Nv)) { // is vector
         static if (isGLSLBaseType!Bv) {
             static if (Nv > 4)
                 alias TypeInfoGLSL = AliasSeq!("array", Bv, Nv, 1);
@@ -139,8 +164,8 @@ template to_gl_type(T)
     static assert(kind != "invalid");
 
     alias BT = TInfo[1];
-    enum size_t N = TInfo[2];
-    enum size_t M = TInfo[3];
+    enum ulong N = TInfo[2];
+    enum ulong M = TInfo[3];
 
     static if (kind == "vector" && N <= 4) {
         static immutable string type_name = BT.stringof.toUpper;
@@ -285,6 +310,7 @@ private string enum_to_str(T)(T f) if (is(T == enum))
 
 struct Shader
 {
+    import std.bitmanip             : bitfields;
     enum Type {
         VERTEX           =  GL_VERTEX_SHADER,
         GEOMETRY         =  GL_GEOMETRY_SHADER,
@@ -494,6 +520,7 @@ struct Shader
 
 struct Program
 {
+    import std.bitmanip             : bitfields;
     // Nothing here throws
     nothrow:
 
@@ -849,7 +876,7 @@ struct VBufferObject
     static void disable(GLenum target) @safe => cast(void)VBufferObject().bind(target);
 
     @trusted
-    static GLResult!void set_data(GLenum target, size_t size, const(void*) data, GLenum usage)
+    static GLResult!void set_data(GLenum target, ulong size, const(void*) data, GLenum usage)
     {
         return gl_wrap!glBufferData(target, size, data, usage).to_glresult();
     }
@@ -875,7 +902,7 @@ struct VBufferObject
     /*
        The OpenGL target often has no effect really so it doesn't matter which you use
     */
-    GLResult!void set_data(size_t size, const(void*) data = null, GLenum usage = GL_STATIC_DRAW)
+    GLResult!void set_data(ulong size, const(void*) data = null, GLenum usage = GL_STATIC_DRAW)
     {
         // TODO: Hmmmmmmm, not sure about this one
         /* if (auto res = this.bind(GL_ARRAY_BUFFER)) */
@@ -905,11 +932,11 @@ struct GLAttributeInfo
     int loc;
     GLType type;
     int count;
-    size_t offset_;
+    ulong offset_;
     bool normalized = false;
 
     static GLResult!GLAttributeInfo from_name
-    (int program_id, string name, GLType type, int count, size_t offset_, bool normalized=false)
+    (int program_id, string name, GLType type, int count, ulong offset_, bool normalized=false)
     {
         GLAttributeInfo attr = GLAttributeInfo(-1, type, count, offset_, normalized);
         if (auto res = attr.set_location(name, program_id))
@@ -937,10 +964,10 @@ struct GLAttributeInfo
             => gl_vertex_attrib_divisor(this.loc, divisor);
 
     // Remember about glVertexAttribFormat
-    GLResult!void set(size_t stride)
+    GLResult!void set(ulong stride)
         => gl_vertex_attribute_conf(loc, count, type, stride, offset_, normalized);
 
-    GLResult!void setI(size_t stride)
+    GLResult!void setI(ulong stride)
         => gl_vertex_attributeI_conf(loc, count, type, stride, offset_);
 }
 
@@ -964,12 +991,27 @@ struct GLUniform
         return GLResult!void();
     }
 
+    GLResult!void set(T)(T value)
+    if (T.stringof.among("float", "int", "uint"))
+    {
+        T[1] val = value; // not great but just easier
+        return gl_set_uniform(this.loc, 1, val);
+    }
+
     GLResult!void set_mat4(int n, const(float)[] mat, bool normalized=false)
         => gl_set_uniform_mat4(this.loc, n, mat, normalized);
 
     // Will copy as much as possible of mat
     GLResult!void set_mat4(const(float)[] mat, bool normalized=false)
         => gl_set_uniform_mat4(this.loc, mat, normalized);
+
+    GLResult!void set_v(int N, T)(T[N] vec, int n = 1)
+    if (T.stringof.among("float", "int", "uint") && N <= 4)
+        => gl_set_uniform(this.loc, n, vec);
+
+    GLResult!void set_v(int N, T)(T[] vec, int n = 1)
+    if (T.stringof.among("float", "int", "uint") && N <= 4)
+        => gl_set_uniform!N(this.loc, n, vec);
 }
 
 GLResult!void gl_set_uniform_mat4(int loc, const(float[]) mat, bool normalized=false)
@@ -982,41 +1024,54 @@ GLResult!void gl_set_uniform_mat4(int loc, int n, const(float[]) mat, bool norma
 in(mat.length >= 16 * n)
     => gl_wrap!glUniformMatrix4fv(loc, n, normalized, mat.ptr).to_glresult();
 
-// To make this work I have to flatten mat into an array and pass that
-/* GLResult!void gl_set_uniform_mat4(int loc, int n, const(float)[4][] mat, bool normalized=false) */
-/* in(mat.length > 4 * n) */
-/*     => gl_wrap!glUniformMatrix4fv(loc, n, cast(ubyte)normalized, mat[0].ptr).to_glresult(); */
 
-template gl_set_uniform(T)
+private template shortBaseTypeNames(T)
 {
-    alias TInfo = TypeInfoGLSL!T;
+    private enum string type_name = T.stringof;
+    static assert(type_name.among("float", "int", "uint"));
 
-    enum string kind = TInfo[0];
-
-    static assert(kind != "invalid");
-
-    alias BT = TInfo[1];
-    enum size_t N = TInfo[2];
-    enum size_t M = TInfo[3];
-
-    GLResult!void set(BT[] vec...)
-    {
-        T v_cp = v[]; // copy v since it's immutable
-        mixin("glUniform"~N.to!string~TC~"v(loc, 1, v_cp.ptr);");
-    }
-
-    static if (kind == "vector" || kind == "matrix")
-    void set(in BT[N] vec)
-    {
-        BT[N] v_cp = v[]; // copy v since it's immutable
-        mixin("glUniform"~N.to!string~TC~"v(loc, 1, v_cp.ptr);");
-    }
-
-    static if (kind == "matrix")
-    void set(BT[N][M] mat);
+    static if (type_name == "float" || type_name == "int")
+        enum string shortBaseTypeNames = [type_name[0]];
+    else
+        enum string shortBaseTypeNames = "ui";
 }
 
-/* void gl_set_uniform(T, size_t N)(in T[N] vec) */
+// Doesn't compile on ldc 1.35 
+/* private static immutable string[string] shortBaseTypeNames = [ */
+/*     "float": "f", */
+/*     "int": "i", */
+/*     "uint": "ui" */
+/* ]; */
+
+GLResult!void  gl_set_uniform(int N, T)(int loc, int n, T[N] v)
+if (T.stringof.among("float", "int", "uint") && N <= 4)
+{
+    enum string shortT = shortBaseTypeNames!(T);
+
+    return gl_wrap!(mixin("glUniform"~N.to!string~shortT~"v"))(loc, n, v.ptr)
+            .to_glresult();
+}
+
+GLResult!void gl_set_uniform(int N, T)(int loc, int n, T[] v)
+if (T.stringof.among("float", "int", "uint") && N <= 4)
+in(v.length >= n * N)
+{
+    enum string shortT = shortBaseTypeNames!(T);
+
+    return gl_wrap!(mixin("glUniform"~N.to!string~shortT~"v"))(loc, n, v.ptr)
+            .to_glresult();
+}
+
+GLResult!void  gl_set_uniform(int N, T)(int loc, T[N][] v)
+if (T.stringof.among("float", "int", "uint") && N <= 4)
+{
+    enum string shortT = shortBaseTypeNames!(T.stringof);
+
+    return gl_wrap!(mixin("glUniform"~N.to!string~shortT~"v"))(loc, v.length, v.ptr)
+            .to_glresult();
+}
+
+/* void gl_set_uniform(T, ulong N)(in T[N] vec) */
 /* { */
 /*     T[N] vec_cp = vec[]; // Copy V since it's immutable */
 /*     mixin("glUniform"~N.to~string~TC~"v(loc, 1, vec_cp.ptr);"); */
@@ -1024,7 +1079,8 @@ template gl_set_uniform(T)
 
 // gl_set_uniform!mat4(0, mpv_mat, true)
 
-private enum __algo = q{
+// NOTE: This is only an idea
+private enum __vadgl_idea = q{
     // TODO: perhaps also assign here the vertex buffer
     // for each of these attributes
     struct Vertex
@@ -1042,7 +1098,7 @@ private enum __algo = q{
     // The relevant methods and maybe attributes
     template VertexFormat(VertexType)
     {
-        enum size_t AttribCount = getAttribCount!VertexType;
+        enum ulong AttribCount = getAttribCount!VertexType;
 
         GLAttribInfo[AttribCount] attributes;
         AttributeType.tupleof[] values;
@@ -1070,13 +1126,13 @@ template glattribute(T)
     static assert(kind != "invalid");
 
     alias BT = TInfo[1];
-    enum size_t N = TInfo[2];
-    enum size_t M = TInfo[3];
+    enum ulong N = TInfo[2];
+    enum ulong M = TInfo[3];
 
     static immutable GLType type = to_gl_type!BT;
 
     @safe @nogc nothrow pure
-    GLAttributeInfo glattribute(uint loc, size_t offset_, bool normalized=false)
+    GLAttributeInfo glattribute(uint loc, ulong offset_, bool normalized=false)
         => GLAttributeInfo(loc, type, N * M, offset_, normalized);
 }
 
@@ -1088,14 +1144,14 @@ template glattribute(T)
 // TODO: change error type
 nothrow
 GLResult!void gl_vertex_attribute_conf
-(uint loc, int count, GLType type, size_t stride, size_t offset_, bool normalized = false)
+(uint loc, int count, GLType type, ulong stride, ulong offset_, bool normalized = false)
     => gl_wrap!glVertexAttribPointer(
             loc, count, type,
             normalized, cast(GLsizei)stride, cast(void*)offset_).to_glresult();
 
 nothrow
 GLResult!void gl_vertex_attributeI_conf
-(uint loc, int count, GLType type, long stride, size_t offset_)
+(uint loc, int count, GLType type, long stride, ulong offset_)
     => gl_wrap!glVertexAttribIPointer(
             loc, count, type,
             cast(GLsizei)stride, cast(void*)offset_).to_glresult();
@@ -1162,7 +1218,7 @@ static GLResult!int gl_get_uniform_location(string name, int program_id)
 // TODO: Replace GLEnum with my own `GLPrimitive` type
 /*
 NOTE:
-because I'm using size_t instead of an integer GL_INVALID_VALUE cannot happen
+because I'm using ulong instead of an integer GL_INVALID_VALUE cannot happen
 here, but there might be an error if count is >= 2^63
 */
 nothrow
@@ -1170,12 +1226,12 @@ static GLResult!void gl_draw_arrays(GLenum mode, uint first, int count)
     => gl_wrap!glDrawArrays(mode, first, count).to_glresult();
 
 nothrow
-static GLResult!void gl_draw_elements(GLenum mode, int count, GLType type, size_t indices)
+static GLResult!void gl_draw_elements(GLenum mode, int count, GLType type, ulong indices)
     => gl_wrap!glDrawElements(mode, count, type, cast(void*)indices).to_glresult();
 
 nothrow
 GLResult!void gl_draw_range_elements
-(GLenum mode, uint start, uint end, int count, GLType type, size_t offset_)
+(GLenum mode, uint start, uint end, int count, GLType type, ulong offset_)
     => gl_wrap!glDrawRangeElements(mode, start, end, count, type, cast(void*)offset_).to_glresult();
 
 // Only works with OpenGL version >= 3.1
@@ -1249,10 +1305,10 @@ if (is(T == Shader) || is(T == Program))
         // TODO: all this could be done in a single buffer.
         char[2048] log_buff = void; log_buff[] = '\0';
 
-        size_t head_len = log_buff[].sformat("Error on \"%s\" shader\n", self.name).length;
+        ulong head_len = log_buff[].sformat("Error on \"%s\" shader\n", self.name).length;
         string tail = "\n[LOG SIZE LIMIT REACHED]\0";
         // size to copy from `erro_log`
-        size_t log_cp_size =
+        ulong log_cp_size =
             (log_size + head_len > 2047)
                 ? 2047 - head_len : log_size;
 

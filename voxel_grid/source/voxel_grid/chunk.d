@@ -25,7 +25,7 @@ enum bool isChunk(T) =
 
 
 @safe @nogc nothrow pure
-static size_t to_index_(uint x, uint y, uint z, ubyte magnitude)
+static ulong to_index_(uint x, uint y, uint z, ubyte magnitude)
     => x + (y << magnitude) + (z << (magnitude << 1));
 
 struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
@@ -37,14 +37,17 @@ struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
     alias VoxelType = VoxelT;
     enum uint size = 1 << chunk_magnitude;
     enum uint magnitude = chunk_magnitude;
+    enum uint voxel_count = 1 << (magnitude * 3);
 
     VoxelType[1 << (magnitude * 3)] data;
 
-    bool in_bounds(int x, int y, int z)
+    bool in_bounds(int x, int y, int z) const pure
         => (x >= 0 && y >= 0 && z >= 0 &&
             x < size && y < size && z < size);
 
-    size_t to_index(uint x, uint y, uint z) => to_index_(x, y, z, magnitude);
+    bool in_bounds(const int[3] p) const pure => in_bounds(p[0], p[1], p[2]);
+
+    ulong to_index(uint x, uint y, uint z) const pure => to_index_(x, y, z, magnitude);
 
     Nullable!VoxelType get_voxel(uint cx, uint cy, uint cz)
     {
@@ -58,6 +61,52 @@ struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
     {
         data[to_index(cx, cy, cz)] = voxel;
     }
+
+    ref inout(VoxelType) opIndex(uint x, uint y, uint z) inout return
+    in (this.in_bounds(x, y, z))
+    {
+        return data[to_index(x, y, z)];
+    }
+
+    ref inout(VoxelType) opIndex(int[3] p) inout return => this[p[0], p[1], p[2]];
+
+    ref inout(VoxelType) opIndex(uint index) inout return => data[index];
 }
 
 alias Chunk = VoxelChunk!Voxel;
+
+unittest
+{
+    import std.stdio;
+
+    Chunk chunk;
+
+    chunk.set_voxel(3, 0, 0, Voxel(true));
+    chunk.set_voxel(0, 3, 0, Voxel(true));
+    chunk.set_voxel(0, 0, 3, Voxel(true));
+
+    chunk.set_voxel(1, 1, 1, Voxel(true));
+    chunk.set_voxel(1, 2, 3, Voxel(true));
+    chunk.set_voxel(3, 3, 3, Voxel(true));
+
+    assert(chunk.get_voxel(0, 0, 0).get.is_empty());
+    assert(chunk.get_voxel(3, 1, 3).get.is_empty());
+    assert(chunk.get_voxel(0, 1, 0).get.is_empty());
+
+    assert(!chunk.get_voxel(3, 0, 0).get.is_empty());
+    assert(!chunk.get_voxel(0, 3, 0).get.is_empty());
+    assert(!chunk.get_voxel(0, 0, 3).get.is_empty());
+
+    assert(!chunk.get_voxel(1, 1, 1).get.is_empty());
+    assert(!chunk.get_voxel(1, 2, 3).get.is_empty());
+    assert(!chunk.get_voxel(3, 3, 3).get.is_empty());
+
+    /* if (chunk.size > 0x400) { */
+    /*     if (chunk.size > 0x100000) */
+    /*         writeln("BitChunk!", MAG, ".sizeof = ", chunk.size / 0x100000, " MB"); */
+    /*     else */
+    /*         writeln("BitChunk!", MAG, ".sizeof = ", chunk.size / 0x400, " KB"); */
+    /* } */
+    /* else writeln("BitChunk!", MAG, ".sizeof = ", chunk.size, " B"); */
+    /* writeln("BitChunk(", DIM, "x", DIM, "x", DIM, ") Voxel count = ", BitChunk.voxel_count); */
+}

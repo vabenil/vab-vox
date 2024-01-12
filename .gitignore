@@ -1,4 +1,5 @@
 .dub
+dub.selections.json
 docs.json
 __dummy.html
 docs/
@@ -9,22 +10,28 @@ vox_engine.dll
 vox_engine.a
 vox_engine.lib
 vox_engine-test-*
-*test-library
+
 *.exe
 *.pdb
 *.o
 *.obj
 *.lst
+*.dll
 
-common/libvox_engine_common.a
-common/vox_engine_common.lib
+**/*-test-library
+**/*-test-unittest
 
-vadgl/libvox_engine_vadgl.a
-vadgl/vox_engine_vadgl.lib
+common/*.a
+/common/*.lib
 
-nuklear/libvox_engine_nuklear.a
-nuklear/vox_engine_nuklear.lib
+/vadgl/*.a
+/vadgl/*.lib
 
-voxel_grid/libvox_engine_voxel_grid.a
-voxel_grid/vox_engine_voxel_grid.lib
-voxel_grid/libvoxel_grid.a
+/nuklear/*.a
+/nuklear/*.lib
+
+/voxel_grid/*.a
+/voxel_grid/*.lib
+
+/voxel_renderer/*.a
+/voxel_renderer/*.lib
