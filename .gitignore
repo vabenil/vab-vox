@@ -10,27 +10,28 @@ vox_engine.dll
 vox_engine.a
 vox_engine.lib
 vox_engine-test-*
-*test-library
+
 *.exe
 *.pdb
 *.o
 *.obj
 *.lst
+*.dll
 
-common/*.a
-common/*.lib
-common/libvox_engine_common.a
+**/*-tests-library
+**/*-tests-unittest
 
-vadgl/*.a
-vadgl/*.lib
+**/common/*.a
+**/common/*.lib
 
-nuklear/*.a
-nuklear/*.lib
+**/vadgl/*.a
+**/vadgl/*.lib
 
-voxel_grid/*.a
-voxel_grid/*.lib
-voxel_grid/*.a
+**/nuklear/*.a
+**/nuklear/*.lib
 
-voxel_renderer/*.a
-voxel_renderer/vox_engine-voxel_renderer-tests-unittest
-voxel_renderer/vox_engine-voxel_renderer-tests-library
+**/voxel_grid/*.a
+**/voxel_grid/*.lib
+
+**/voxel_renderer/*.a
+**/voxel_renderer/*.lib
