@@ -10,7 +10,7 @@ struct CapedArray(ElementType, uint capacity)
     // Makes no sense to make an array with that's more than 4 gb
     // for that just use a dynamic array
 
-    // Not private but shouldn't be modified unless you know whay you are doing
+    // Not private but shouldn't be modified unless you know what you are doing
     uint _length = 0;
 
     E[capacity] array = void;
@@ -74,7 +74,8 @@ struct CapedArray(ElementType, uint capacity)
     bool opOpAssign(string op : "~")(E value) => append(value);
 
     // Overrides for iterators
-    // Can't know whether this will be safe or not
+    // Can't know whether this will be safe, nothrow or anything really
+    // I guess I will need a template for this
     int opApply(int delegate(int index, ref E value) ops)
     {
         int result = 0;
