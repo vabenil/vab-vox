@@ -74,3 +74,39 @@ struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
 }
 
 alias Chunk = VoxelChunk!Voxel;
+
+unittest
+{
+    import std.stdio;
+
+    Chunk chunk;
+
+    chunk.set_voxel(3, 0, 0, Voxel(true));
+    chunk.set_voxel(0, 3, 0, Voxel(true));
+    chunk.set_voxel(0, 0, 3, Voxel(true));
+
+    chunk.set_voxel(1, 1, 1, Voxel(true));
+    chunk.set_voxel(1, 2, 3, Voxel(true));
+    chunk.set_voxel(3, 3, 3, Voxel(true));
+
+    assert(chunk.get_voxel(0, 0, 0).get.is_empty());
+    assert(chunk.get_voxel(3, 1, 3).get.is_empty());
+    assert(chunk.get_voxel(0, 1, 0).get.is_empty());
+
+    assert(!chunk.get_voxel(3, 0, 0).get.is_empty());
+    assert(!chunk.get_voxel(0, 3, 0).get.is_empty());
+    assert(!chunk.get_voxel(0, 0, 3).get.is_empty());
+
+    assert(!chunk.get_voxel(1, 1, 1).get.is_empty());
+    assert(!chunk.get_voxel(1, 2, 3).get.is_empty());
+    assert(!chunk.get_voxel(3, 3, 3).get.is_empty());
+
+    /* if (chunk.size > 0x400) { */
+    /*     if (chunk.size > 0x100000) */
+    /*         writeln("BitChunk!", MAG, ".sizeof = ", chunk.size / 0x100000, " MB"); */
+    /*     else */
+    /*         writeln("BitChunk!", MAG, ".sizeof = ", chunk.size / 0x400, " KB"); */
+    /* } */
+    /* else writeln("BitChunk!", MAG, ".sizeof = ", chunk.size, " B"); */
+    /* writeln("BitChunk(", DIM, "x", DIM, "x", DIM, ") Voxel count = ", BitChunk.voxel_count); */
+}
