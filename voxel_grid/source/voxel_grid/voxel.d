@@ -36,4 +36,4 @@ struct Voxel
     bool opCast(T : bool)() const pure => !this.is_empty();
 }
 
-static assert(isVoxel!Voxel);
+static assert(isVoxel!Voxel, "Error with default voxel implementation");

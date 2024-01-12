@@ -2,8 +2,9 @@
     "name": "nuklear",
     "targetType": "library",
     "lflags": [
-        "-L$PACKAGE_DIR/lib",
-        "-lnuklear_static"
+        "-L$PACKAGE_DIR/lib"
     ],
+    "lflags-linux": [ "-lnuklear_static" ],
+    "lflags-windows": [ "nuklear_static.a" ],
     "versions": ["BindNuklear_Static"]
 }

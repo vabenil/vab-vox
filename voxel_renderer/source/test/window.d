@@ -1,3 +1,5 @@
+module test.window;
+
 import bindbc.sdl;
 import bindbc.opengl;
 
@@ -71,9 +73,6 @@ struct Window
             throw new Exception("OpenGL version 3.2 or greater required");
         }
 
-        // NOTE: For some reason this allows me to use functions from
-        // future versions of OpenGL even though the context should always
-        // be GL 3.2
         set_opengl_attributes(3, 2);
     }
 

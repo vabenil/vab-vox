@@ -1,37 +1,41 @@
 {
-    "name": "vox_engine",
-    "authors": [
-        "Victor Abenil Fernandez Rodriguez"
-    ],
-    "copyright": "Copyright © 2023, Victor Abenil Fernandez Rodriguez",
-    "dependencies": {
-        "vox_engine:common": "*",
-        "vox_engine:voxel_grid": "*",
-        "vox_engine:vadgl": "*",
-        "vox_engine:nuklear": "*",
-
-        "bindbc-opengl": "~>1.1.0",
-        "bindbc-sdl": "~>1.4.2",
-        "inmath": "~>1.0.5"
-    },
-    "subPackages": [
-        "./common/",
-        "./voxel_grid/",
-        "./vadgl/",
-        "./nuklear/"
-    ],
-    "description": "A fast Voxel engine in D",
-    "license": "MIT",
-    "libs": [
-        "SDL2"
-    ],
-    "subConfigurations": {
-        "bindbc-sdl": "staticBC"
-    },
-    "versions": [
-        "SDL_205",
-        "GL_32",
-        "NK_ALL",
-        "BindNuklear_Static"
-    ]
+	"authors": [
+		"Victor Abenil Fernandez Rodriguez"
+	],
+	"copyright": "Copyright © 2023, Victor Abenil Fernandez Rodriguez",
+	"dependencies": {
+		"bindbc-opengl": "1.1.0",
+		"bindbc-sdl": "1.4.2",
+		"inmath": "~>1.0.5",
+		"vox-d": "~>1.0.0",
+		"vox_engine:common": ">=0.0.0",
+		"vox_engine:vadgl": ">=0.0.0",
+		"vox_engine:voxel_grid": ">=0.0.0",
+		"vox_engine:voxel_renderer": ">=0.0.0"
+	},
+	"description": "A fast Voxel engine in D",
+	"#libs": [
+		"SDL2"
+	],
+	"license": "MIT",
+	"name": "vox_engine",
+	"#subConfigurations": {
+		"bindbc-sdl": "staticBC"
+	},
+	"subConfigurations": {
+		"bindbc-sdl": "dynamicBC"
+	},
+	"subPackages": [
+		"./common/",
+		"./voxel_grid/",
+		"./vadgl/",
+		"./voxel_renderer/"
+	],
+	"versions": [
+		"SDL_205",
+		"GL_42",
+		"NK_ALL",
+		"BindNuklear_Static",
+		"commented__VADGL_DebugGLCalls"
+	]
 }

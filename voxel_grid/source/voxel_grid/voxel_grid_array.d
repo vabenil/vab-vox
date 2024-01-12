@@ -18,12 +18,17 @@ import std.typecons     : Nullable, nullable;
 size_t to_index_(uint x, uint y, uint z, ubyte magnitude)
     => x + (y << magnitude) + (z << (magnitude << 1));
 
-/* /+ */
-/* Suggestion: Alias this to SVGridArray */
-/* +/ */
-class VoxelGridArray(ChunkType) : VoxelGridTmp!ChunkType
+/* 
+Suggestion: Alias this to SVGridArray
+
+NOTE: Using the octree indexing method could improve chunk copying performance
+Add the cost of making indexing slightly slower
+*/
+
+class VoxelGridArray(ChunkT) : VoxelGridTmp!ChunkT
 {
     alias VoxelType = ChunkType.VoxelType;
+    alias ChunkType = ChunkT;
 
     ubyte magnitude;
     uint size;
