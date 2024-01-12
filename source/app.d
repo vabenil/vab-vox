@@ -102,14 +102,14 @@ void init_globals()
     vec3 target = vec3(15, 8.0f, 15); // look at second chunk
 
     // set camera
-    gstate.camera = Camera(pos, 60.0f, gstate.WINDOW_WIDTH, gstate.WINDOW_HEIGHT);
+    gstate.camera = Camera(pos, 60.0f, gstate.WINDOW_WIDTH, gstate.WINDOW_HEIGHT, 0.1f, 512);
     gstate.camera.set_direction((target - gstate.camera.pos).normalized);
     gstate.camera.look_at(); // calculate view matrix
 
     /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
     /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
-    gstate.world.load_from_vox_file("./assets/realistic_terrain.vox");
-    /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
+    /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
+    gstate.world.load_from_vox_file("./assets/Plane04.vox");
     /* gstate.world.load_from_vox_file("./assets/11.vox"); */
 
 }
