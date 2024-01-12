@@ -1,4 +1,5 @@
 ## TODO:
+- [IMPORTANT]: stop requiring OpenGL for renderer and just use vadgl
 - Make subpackage for `vadgl` or add it as a external repo **[in_progress]**
 - Create a visualization utility for Quad trees to help myself
 - Make a way to render chunks
