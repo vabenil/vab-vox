@@ -18,20 +18,20 @@ vox_engine-test-*
 *.lst
 *.dll
 
-**/*-tests-library
-**/*-tests-unittest
+**/*-test-library
+**/*-test-unittest
 
-**/common/*.a
-**/common/*.lib
+common/*.a
+/common/*.lib
 
-**/vadgl/*.a
-**/vadgl/*.lib
+/vadgl/*.a
+/vadgl/*.lib
 
-**/nuklear/*.a
-**/nuklear/*.lib
+/nuklear/*.a
+/nuklear/*.lib
 
-**/voxel_grid/*.a
-**/voxel_grid/*.lib
+/voxel_grid/*.a
+/voxel_grid/*.lib
 
-**/voxel_renderer/*.a
-**/voxel_renderer/*.lib
+/voxel_renderer/*.a
+/voxel_renderer/*.lib
