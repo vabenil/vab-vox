@@ -57,10 +57,13 @@ struct World(ChunkT)
         for (int i = 0; i < model.width; i++) {
         /* foreach (i; parallel(model.width.iota)) { */
             auto m_vox = model.voxel(i, j, k); // magica voxel
-            Color4b color_ = Color4b(m_vox.r, m_vox.g, m_vox.b, m_vox.a);
+            immutable Color4b color_ = Color4b(m_vox.r, m_vox.g, m_vox.b, m_vox.a);
             /* Color4b color = Color4b(m_vox.a, m_vox.b, m_vox.r, m_vox.g); */
-            this[IVec3(i, k, j)] =  VoxelT(color_.to_hex());
+            if (color_ != Color4b.EMPTY) {
+                this[IVec3(i, k, j)] = VoxelT(color_.to_hex());
+            }
         }
+        writeln("Model loaded!");
     }
 
     int opApply(int delegate(IVec3 cpos, ref ChunkT chunk) ops)
