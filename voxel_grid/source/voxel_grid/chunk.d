@@ -32,7 +32,7 @@ static ulong to_index_(uint x, uint y, uint z, ubyte magnitude)
 struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
 {
     @safe nothrow:
-    static assert(chunk_magnitude > 0 && chunk_magnitude <= 6);
+    static assert(chunk_magnitude > 0 && chunk_magnitude <= 10);
 
     alias VoxelType = VoxelT;
     alias This = VoxelChunk!(VoxelType, chunk_magnitude);
