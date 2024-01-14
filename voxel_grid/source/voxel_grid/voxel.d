@@ -17,7 +17,7 @@ enum bool isVoxel(T) =
 // Default Voxel implmentation
 struct Voxel
 {
-    ubyte[4] data_;
+    ubyte[4] data_ = 0;
 
     this(uint init_data)
     {
