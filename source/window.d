@@ -6,6 +6,61 @@ import std.format       : format;
 import std.exception    : enforce;
 
 
+struct GLVersion
+{
+    enum : GLVersion {
+        GL11 = GLVersion(1, 1),
+        GL12 = GLVersion(1, 2),
+        GL13 = GLVersion(1, 3),
+        GL14 = GLVersion(1, 4),
+        GL15 = GLVersion(1, 5),
+        GL20 = GLVersion(2, 0),
+        GL21 = GLVersion(2, 1),
+        GL30 = GLVersion(3, 0),
+        GL31 = GLVersion(3, 1),
+        GL32 = GLVersion(3, 2),
+        GL33 = GLVersion(3, 3),
+        GL40 = GLVersion(4, 0),
+        GL41 = GLVersion(4, 1),
+        GL42 = GLVersion(4, 2),
+        GL43 = GLVersion(4, 3),
+        GL44 = GLVersion(4, 4),
+        GL45 = GLVersion(4, 5),
+        GL46 = GLVersion(4, 6),
+    }
+
+    // Convinience
+    string toString() const
+        => format!"GLVersion(%d.%d)"(mayor, minor);
+
+    int mayor = 3;
+    int minor = 2;
+
+}
+
+private GLSupport to_glsupport(GLVersion _version)
+{
+    import std.traits       : EnumMembers;
+
+    int gl_version = _version.mayor * 10 + _version.minor;
+
+    // Just to be safe we aren't doing something stupid.
+    // This could result on things breaking silently otherwise
+    switch (gl_version)
+    {
+        static foreach (glsupport_version; EnumMembers!GLSupport)
+        {
+            case glsupport_version:
+                return glsupport_version;
+        }
+        default:
+            throw new Exception(
+                format!"%s is not a valid OpenGL version"(_version)
+            );
+
+    }
+}
+
 struct Window
 {
     enum Flag : uint
@@ -29,14 +84,27 @@ struct Window
 
     alias Flag this;
 
+    // set to true if sdl and opengl where already manually loaded
+    static bool sdl_loaded = false;
+    static bool opengl_loaded = false;
+
+    private {
+        SDL_Window* sdl = null;
+        SDL_GLContext ctx = null;
+        GLVersion loaded_version; // Loaded version may differ with target
+        bool success = false; // window created successfully
+    }
+
+    // TODO: Support more bindings
     @trusted
-    static void set_opengl_attributes(int mayor_v, int minor_v)
+    static void set_opengl_attributes(GLVersion gl_version)
     {
-        // Use OpenGL 3.2
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, mayor_v);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor_v);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gl_version.mayor);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, gl_version.minor);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
+        // TODO: Maybe add way to config this later, 
+        // Maybe a config object that you pass on windows creation
         SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
         SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
         SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
@@ -63,40 +131,30 @@ struct Window
                 throw new Exception("Couldn't load SDL Image");
     }
 
-    static void load_opengl()
+    static void load_opengl(.GLVersion target)
     {
-        // TODO: stop using hard-coded opengl version
         GLSupport ret = loadOpenGL();
-        if (ret < GLSupport.gl32) {
-            throw new Exception("OpenGL version 3.2 or greater required");
+        // TODO: A lower version
+        if (ret < target.to_glsupport()) {
+            throw new Exception(format!"OpenGL version %s or greater required"(target));
         }
 
         // NOTE: For some reason this allows me to use functions from
-        // future versions of OpenGL even though the context should always
-        // be GL 3.2
-        set_opengl_attributes(3, 2);
-    }
-
-    // set to true if sdl and opengl where already manually loaded
-    static bool sdl_loaded = false;
-    static bool opengl_loaded = false;
-
-    private {
-        SDL_Window* sdl = null;
-        SDL_GLContext ctx = null;
-        bool success = false; // window created successfully
+        // future versions of OpenGL
+        set_opengl_attributes(target);
     }
 
     @safe
-    this(SDL_Window* sdl, SDL_GLContext ctx, bool success)
+    this(SDL_Window* sdl, SDL_GLContext ctx, .GLVersion loaded, bool success)
     {
         this.sdl = sdl;
         this.ctx = ctx;
+        this.loaded_version = loaded;
         this.success = success;
     }
 
     @trusted
-    this(string title, uint width, uint height, Flag flags = Flag.NONE)
+    this(string title, uint width, uint height, GLVersion target = GLVersion.GL32, Flag flags = Flag.NONE)
     {
         static if (!bindbc.sdl.staticBinding)
             if (!sdl_loaded)
@@ -126,7 +184,7 @@ struct Window
             );
 
         if (!opengl_loaded)
-            load_opengl();
+            load_opengl(target);
     }
 
     ~this() @trusted
