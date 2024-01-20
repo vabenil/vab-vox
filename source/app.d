@@ -18,6 +18,10 @@ import voxel_grid.voxel;
 import voxel_renderer.gl_renderer;
 import voxel_renderer.gl_device;
 
+/+ NOTE: smaller chunks mean less chunks, less chunks increases performance
+    This is probably mostly because of the number of render calls. Could be
+    mitageted by rendering chunks in batches
++/
 alias MChunk = VoxelChunk!(Voxel, 6);
 
 struct GState
@@ -27,6 +31,7 @@ struct GState
     enum int WINDOW_WIDTH = 1152;
     enum int WINDOW_HEIGHT = 648;
 
+    bool grab_mouse = true;
     bool quit = false;
     Camera camera;
     Window win;
@@ -55,7 +60,7 @@ void on_key_down(SDL_Event* e)
     vec3 dir = gstate.camera.direction;
     vec2 dir_2d = vec2(dir.x, dir.z).normalized;
 
-    const float speed = 0.5;
+    static float speed = 0.5;
     float x_increase = dir_2d.x * speed;
     float z_increase = dir_2d.y * speed;
 
@@ -77,6 +82,14 @@ void on_key_down(SDL_Event* e)
     if (keyboard_state[SDL_SCANCODE_W]) {
         delta.x += x_increase;
         delta.z += -z_increase;
+    }
+
+    if (keyboard_state[SDL_SCANCODE_E]) {
+        gstate.grab_mouse = !gstate.grab_mouse;
+    }
+
+    if (keyboard_state[SDL_SCANCODE_F]) {
+        speed += 0.1 * ((mod & KMOD_SHIFT) ? -1 : 1);
     }
 
     if (keyboard_state[SDL_SCANCODE_SPACE] && !(mod & KMOD_SHIFT)) {
@@ -106,19 +119,19 @@ void init_globals()
     gstate.camera.set_direction((target - gstate.camera.pos).normalized);
     gstate.camera.look_at(); // calculate view matrix
 
-    /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
+    gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox");
     /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
     /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
-    gstate.world.load_from_vox_file("./assets/Plane04.vox");
+    /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
     /* gstate.world.load_from_vox_file("./assets/11.vox"); */
 
 }
 
 void init_graphics()
 {
-    gstate.win = Window("Voxel engine", GState.WINDOW_WIDTH, GState.WINDOW_HEIGHT);
+    gstate.win = Window("Voxel engine", GState.WINDOW_WIDTH, GState.WINDOW_HEIGHT, GLVersion.GL42);
 
-    SDL_SetRelativeMouseMode(true); // wrap this in Window
+    /* SDL_SetRelativeMouseMode(gstate.grab_mouse); // wrap this in Window */
     glClearColor(0.3, 0.3, 0.3, 1); // wrap this in vadgl
 
     GLDevice device = new GLDevice();
@@ -142,7 +155,7 @@ void main_loop()
     import std.datetime.stopwatch;
 
     int ticks = 1;
-    double duration_sum = 0;
+    double duration_sum = 1;
 
     SDL_EHandler event_handler;
     event_handler.add_handler("quit", delegate(e) { gstate.quit = true; });
@@ -150,6 +163,8 @@ void main_loop()
     event_handler.add_handler("key_down", &on_key_down);
     while (!gstate.quit) {
         event_handler.handle_sdl_events(&gstate);
+
+        SDL_SetRelativeMouseMode(gstate.grab_mouse); // wrap this in Window
 
         StopWatch watch = StopWatch(AutoStart.no);
         watch.start();
@@ -170,7 +185,7 @@ void main_loop()
         watch.stop();
         double avg_dur = duration_sum / ticks;
         double fps = 1_000_000 / avg_dur; // don't count writeln
-        writeln(fps);
+        writeln(cast(int)fps);
         duration_sum += watch.peek.total!"usecs";
         ticks++;
     }
