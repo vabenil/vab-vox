@@ -1,6 +1,10 @@
 ## TODO:
+- [PRIORITY]: Add temporal buffer for chunk rendering
+- [PRIORITY]: Allow arbitrary number of chunks in header
+- [IMPORTANT]: Fix windows bug where on some machines games don't work
+- [IMPORTANT]: Actually start using multiple threads
 - [IMPORTANT]: stop requiring OpenGL for renderer and just use vadgl
-- Make subpackage for `vadgl` or add it as a external repo **[in_progress]**
+- Add `vadg` it as a external repo **[in_progress]**
 - Create a visualization utility for Quad trees to help myself
 - Make a way to render chunks
 - Maybe use sdl2 wrapper in the future
