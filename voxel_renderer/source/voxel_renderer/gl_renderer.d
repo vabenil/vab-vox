@@ -1,3 +1,9 @@
+/+
+    NOTE: Since anyway, currently I'm planning on re-creating chunk meshes whenever a chunk changes,
+    I might as well only store the header with the information about the meshes and delete the meshes from the
+    GPU.
+    Though I guess for the temporary meshes, I gotta keep those on the GPU
++/
 module voxel_renderer.gl_renderer;
 
 public import voxel_renderer.renderer;
@@ -28,8 +34,6 @@ private enum int[3][3] mat3_identity = [
 enum ulong MAG  = 5;
 alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
 
-enum ubyte NULL_ID = 255;
-
 // safe as long as data can store enough bits to fit index
 @nogc nothrow
 static ubyte set_bit(ubyte* data, ulong index, bool value)
@@ -44,103 +48,13 @@ private alias MemRange = Tuple!(int, "start", int, "end");
 
 int mem_size(MemRange range) pure => range.end - range.start;
 
+import utils.chunk_header;
 // A vertex is the same as a face mesh
 // Contains all vertex data
 struct MeshContainer
 {
-    import utils.capedarray;
-    import utils.memstore;
+    import utils.memheader;
     import std.typecons : Tuple, tuple;
-
-    struct ChunkInfo
-    {
-        ivec3 pos;
-        int index;
-        int size;
-
-        int end() const pure => this.index + this.size;
-    }
-
-    struct Header
-    {
-        // I don't expect more than 128 chunks
-        // store information of all chunks
-        ubyte count = 0;
-        // Chunk coordinates
-        ivec3[255] coords = void;
-        // Units in voxel faces
-        int[255] indices = 0;
-        int[255] sizes = 0;
-
-        // Free positions in header (chunks that can be overriden)
-        CapedArray!(ubyte, 255) free_headers; // use as a list
-
-        // Implement this later
-        // Sort by proximity to camera
-        /* void sort(ivec3 cam_pos) */
-        /* { */
-        /*     // ordered array containing indices to header */
-        /*     CapedArray!(byte, 128) order_array; */
-        /*     // for this gotta assume whole thing is unsorted */
-        /* } */
-
-        int find(ivec3 pos)
-        {
-            for (int i = 0; i < this.count; i++) {
-                if (this.free_headers.find(cast(ubyte)i) != -1)
-                    continue; // if this value is freed it doesn't count
-
-                if (this.coords[i] == pos)
-                    return i; // found
-            }
-            return NULL_ID;
-        }
-
-        void swap(int chunk0_i, int chunk1_i)
-        {
-            ChunkInfo tmp = this[chunk0_i];
-
-            this[chunk0_i] = this[chunk1_i];
-            this[chunk1_i] = tmp;
-        }
-
-        bool full() const pure => (count == ubyte.max-1) && (free_headers.length == 0);
-
-        // Returns index to empty space and remove empty space
-        ubyte take_empty() in (!this.full())
-        {
-            if (free_headers.length) {
-                // pop!
-                ubyte index = free_headers[$-1];
-                free_headers._length--;
-                return index;
-            }
-            // push
-            return cast(ubyte)(count++);
-        }
-
-        // Can fail
-        int append(ChunkInfo info) in(!this.full())
-        {
-            int index = this.take_empty();
-            this[index] = info;
-            return index;
-        }
-
-        // Convinience function
-        ChunkInfo opIndex(int i) const pure => ChunkInfo(coords[i], indices[i], sizes[i]);
-
-        ChunkInfo opIndexAssign(ChunkInfo value, int i)
-        {
-            this.coords[i] = value.pos;
-            this.indices[i] = value.index;
-            this.sizes[i] = value.size;
-
-            return value;
-        }
-
-        int opDollar(ulong _) const pure => this.count;
-    }
 
     /*
        IDEA: Maybe use two vbos. One for far away things
@@ -150,8 +64,15 @@ struct MeshContainer
        Close chunks close to $;
    */
 
+    /*
+        TODO: Right now the header contains information about the state in memory of the CPU,
+        not GPU
+    */
+    // I guess I will need a simpler header for the second vbo, perhaps only the size
     Header header; // contains info on what arrays are bound to what places
-    MemStore memstore; // Manages memory
+
+    MemHeader cpu_header;
+
     VoxelVertex[] face_meshes;
     int max_face_count = 0;
 
@@ -163,7 +84,7 @@ struct MeshContainer
     {
         this.max_face_count = count * max_chunk_face_count;
         this.face_meshes.reserve(max_face_count);
-        this.memstore = MemStore(this.max_face_count);
+        this.cpu_header = MemHeader(this.max_face_count);
 
         if (tmp_chunk_buffer.length == 0) {
             this.tmp_chunk_buffer = new VoxelVertex[](max_chunk_face_count);
@@ -193,16 +114,19 @@ struct MeshContainer
             debug {
                 writeln("[WARNING]: Out of memory");
             }
-            return NULL_ID;
+            return Header.NULL_ID;
+        }
+        else {
+            // TODO: Here add the chunk to `temporary` memory
         }
         /* assert(!this.header.full()); */
 
         ubyte header_id = this.header.take_empty();
-        int mem_start = this.memstore.take_mem(this.buff_size);
+        int mem_start = this.cpu_header.allocate(this.buff_size);
 
         assert(mem_start >= 0);
 
-        this.header.coords[header_id] = chunk_pos;
+        this.header.coords[header_id] = chunk_pos.array;
         this.header.indices[header_id] = mem_start;
         this.header.sizes[header_id] = this.buff_size; // we don't know size until we create mesh
 
@@ -223,8 +147,6 @@ struct MeshContainer
     /*         } */
     /*     } */
     /* } */
-
-    bool append_chunk(int face_count, VoxelVertex[] buffer); // TODO: Implement
 
     ulong vertex_buffer_size() const pure => face_meshes.length * VoxelVertex.sizeof;
 
@@ -285,6 +207,7 @@ class VoxelRenderer(ChunkT)
         device.commit_face(pos, Color4b.WHITE, face_id, 0);
     }
 
+    // NOTE: This has no effect if `commit_chunk` is not used
     void commit_voxel_face(Color4b color, int face_id, ivec3 pos)
     {
         mesh_buffer.push_face(VoxelVertex(pos, color, face_id));
@@ -334,8 +257,7 @@ class VoxelRenderer(ChunkT)
     void commit_voxel(VoxelT voxel, ivec3 pos)
     {
         static foreach (s_bit; 0..2)
-        static foreach (i; 0..3)
-        {
+        static foreach (i; 0..3) {
             commit_voxel_face(Color4b(voxel.data), 3 * !(s_bit) + i, pos);
         }
     }
@@ -347,12 +269,11 @@ class VoxelRenderer(ChunkT)
     void render_chunk(ivec3 cpos)
     {
         import std.stdio;
-        int id = this.mesh_buffer.header.find(cpos);
+        int id = this.mesh_buffer.header.find(cpos.array);
 
-        if (id == NULL_ID) {
+        if (id == Header.NULL_ID) {
             return;
         }
-        /* assert(id != -1); */
 
         auto info = this.mesh_buffer.header[id];
         /* import std.stdio; */
