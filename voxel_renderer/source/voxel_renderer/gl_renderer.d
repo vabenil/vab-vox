@@ -34,6 +34,10 @@ private enum int[3][3] mat3_identity = [
 enum ulong MAG  = 5;
 alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
 
+// SIZE of the chunk header / maximum count of chunks to hold in gpu for perm
+// storage
+private enum int CHUNK_HEADER_CAP = 0x1000;
+
 // safe as long as data can store enough bits to fit index
 @nogc nothrow
 static ubyte set_bit(ubyte* data, ulong index, bool value)
@@ -48,7 +52,7 @@ private alias MemRange = Tuple!(int, "start", int, "end");
 
 int mem_size(MemRange range) pure => range.end - range.start;
 
-import utils.chunk_header;
+import utils.chunksheader;
 // A vertex is the same as a face mesh
 // Contains all vertex data
 struct MeshContainer
@@ -69,11 +73,15 @@ struct MeshContainer
         not GPU
     */
     // I guess I will need a simpler header for the second vbo, perhaps only the size
-    Header header; // contains info on what arrays are bound to what places
+    ChunksHeader header; // contains info on what arrays are bound to what places
 
     MemHeader cpu_header;
+    // Chunk of buffers
+    VoxelVertex[] face_meshes; // tracked by cpu_header
 
-    VoxelVertex[] face_meshes;
+    // Add a queue of chunks to send to the GPU
+    // Add gpu header here
+
     int max_face_count = 0;
 
     int buff_size = 0; // 1 unit = `VoxelVertex`
@@ -84,6 +92,7 @@ struct MeshContainer
     {
         this.max_face_count = count * max_chunk_face_count;
         this.face_meshes.reserve(max_face_count);
+        this.header = ChunksHeader(CHUNK_HEADER_CAP);
         this.cpu_header = MemHeader(this.max_face_count);
 
         if (tmp_chunk_buffer.length == 0) {
@@ -106,29 +115,31 @@ struct MeshContainer
     // Adds a chunk to the header and return index of header
     // Also add chunk to vertex buffer
     // IMPORTANT: This function doesn't check whether is already in header
-    ubyte push_chunk(ivec3 chunk_pos)
+    int push_chunk(ivec3 chunk_pos)
     {
         import std.stdio;
         // out of memory
-        if (this.header.full()) {
+        if (this.header.is_full()) {
             debug {
                 writeln("[WARNING]: Out of memory");
             }
-            return Header.NULL_ID;
+            return ChunksHeader.NULL_ID;
         }
         else {
             // TODO: Here add the chunk to `temporary` memory
         }
         /* assert(!this.header.full()); */
 
-        ubyte header_id = this.header.take_empty();
+        // TODO: Create a ChunkInfo first and append later
+        int header_id = this.header.append(ChunkInfo());
         int mem_start = this.cpu_header.allocate(this.buff_size);
 
         assert(mem_start >= 0);
 
-        this.header.coords[header_id] = chunk_pos.array;
-        this.header.indices[header_id] = mem_start;
-        this.header.sizes[header_id] = this.buff_size; // we don't know size until we create mesh
+        this.header[header_id].coords = chunk_pos.array;
+        this.header[header_id].index = mem_start;
+        this.header[header_id].size = this.buff_size; // we don't know size until we create mesh
+        this.header[header_id].modified = true;
 
         face_meshes ~= tmp_chunk_buffer[0..buff_size];
 
@@ -154,7 +165,7 @@ struct MeshContainer
 
     void[] get_chunk_buffer(int index)
     {
-        ChunkInfo info = this.header[index];
+        ChunkInfo info = this.header[index].info;
         return cast(void[])this.face_meshes[info.index..info.end];
     }
 }
@@ -271,11 +282,11 @@ class VoxelRenderer(ChunkT)
         import std.stdio;
         int id = this.mesh_buffer.header.find(cpos.array);
 
-        if (id == Header.NULL_ID) {
+        if (id == ChunksHeader.NULL_ID) {
             return;
         }
 
-        auto info = this.mesh_buffer.header[id];
+        auto info = this.mesh_buffer.header[id].info;
         /* import std.stdio; */
         /* writeln(this.mesh_buffer.face_meshes[info.index]); */
         // send uniform
