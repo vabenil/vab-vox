@@ -212,13 +212,14 @@ class GLDevice : VoxelDevice
         frag_sh = Shader.from_src("frag", Shader.Type.FRAGMENT, frag_source).throw_on_error();
 
         program = Program.create_program("program").throw_on_error();
+
+        foreach (shader; [&vert_sh, &frag_sh])
+            shader.compile().throw_on_error();
+
+        program.attach(vert_sh, frag_sh).throw_on_error();
+        program.link().throw_on_error;
+        program.validate().throw_on_error;
         // Compile, attach and link shaders, then validate
-        if (auto res = program.prepare_and_attach(&vert_sh, &frag_sh)) {
-            stderr.writeln(res.error.to_error_msg());
-            stderr.writeln(vert_sh.get_info_log().throw_on_error());
-            stderr.writeln(frag_sh.get_info_log().throw_on_error());
-            assert(0);
-        }
         program.use().throw_on_error();
 
         // Create buffers
