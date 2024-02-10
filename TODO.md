@@ -16,9 +16,9 @@
 
 ## Old TODO
 - Creating fucking client
-- Write basic code for the world
-- Make the fucking the database
-- Write the fucking OpenGL rasterizer renderer.
+- ~~Write basic code for the world~~
+- Make the fucking the database (May use something else)
+- ~~Write the fucking OpenGL rasterizer renderer~~
 - Create fucking server **[not_important]**
 
 - Be happy
@@ -29,21 +29,3 @@
 - Make particle engine if there's time
 - Write fucking physics
 - Remember that there's `__vector`
-
-```
-Vox
-    dub.json
-    source
-    |   ...
-    vadgl
-    |   source
-    |   |   ...
-    |   dub.json
-    voxel_grid
-    |   source
-    |   |   ...
-    |   dub.json
-    voxel_renderer
-    |   source
-    |   |   ...
-    |   dub.json
