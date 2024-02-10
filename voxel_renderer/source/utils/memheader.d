@@ -2,10 +2,14 @@ module utils.memheader;
 
 
 import std.typecons     : Tuple;
+import std.meta         : allSatisfy, ApplyRight;
 
 alias MemRange = Tuple!(int, "start", int, "end");
 
-private static pure int size(MemRange range) => range.end - range.start;
+@safe @nogc nothrow
+private static int size(MemRange range) pure => range.end - range.start;
+
+private enum isSameType(T1, T2) = is(T1 == T2);
 
 /++
     Contains information about a memory buffer. Meant to be used along side an
@@ -37,10 +41,11 @@ struct MemHeader
 
         If this is empty that means the buffer is empty
     +/
+    /*
+       TODO: If I want this shit to be `@nogc` I need to use `std.container.array`
+       or use my own implementation
+   */
     MemRange[] mem_blocks;
-
-    @property
-    int unused() const pure => this.capacity - this.used;
 
     this(int cap, int mem_block_init_cap = 32)
     {
@@ -49,6 +54,9 @@ struct MemHeader
         // take we can save up on allocations
         this.mem_blocks.reserve(mem_block_init_cap);
     }
+
+    @property
+    int unused() const pure => this.capacity - this.used;
 
     int allocate(int size)
     in (this.unused >= size, "Not enough space")

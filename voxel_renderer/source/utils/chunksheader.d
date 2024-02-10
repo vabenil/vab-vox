@@ -1,7 +1,20 @@
 module utils.chunksheader;
 
+import std.meta : AliasSeq, staticMap;
+
+template mirrorMembers(T1, T2)
+{
+    template mirrorMember(alias member)
+    {
+        alias mirrorMember = mixin("T1."~member.stringof);
+    }
+
+    alias mirrorMembers = staticMap!(mirrorMember, T2.tupleof);
+}
+
 // Likely faster to copy than reference
-bool pos_equals(int[3] v0, int[3] v1)
+@safe @nogc nothrow
+bool pos_equals(int[3] v0, int[3] v1) pure
 {
     bool condition = true;
 
@@ -24,8 +37,24 @@ struct ChunkInfo
 struct ChunkRef
 {
     private {
-        ChunksHeader* header;
-        int header_id;
+        ChunksHeader* header = null;
+        int header_id = -1;
+    }
+
+    @disable this();
+
+    @safe @nogc nothrow
+    this(ChunksHeader* header, int header_id) pure
+    {
+        this.header = header;
+        this.header_id = header_id;
+    }
+
+    void opAssign(ChunkInfo info)
+    {
+        static foreach (i, member; mirrorMembers!(ChunkRef, ChunkInfo)) {
+            member = info.tupleof[i];
+        }
     }
 
     @property
@@ -48,6 +77,9 @@ int end(T)(T chunk_info) if (is(T == ChunkInfo) || is(T == ChunkRef))
 
 struct ChunksHeader
 {
+    //------ ALL HERE IS @safe NOTHROW
+    @safe nothrow:
+
     enum int NULL_ID = -1;
 
     int count = 0;
@@ -94,7 +126,6 @@ struct ChunksHeader
 
     void remove(int index) in (index >=0 && index < this.count)
     {
-        import std.meta         : AliasSeq;
         import std.algorithm    : remove;
 
         static foreach (member; AliasSeq!(coords, indices, sizes, modified))
@@ -103,9 +134,11 @@ struct ChunksHeader
         this.count--;
     }
 
-    ChunkRef opIndex(int index) => ChunkRef(&this, index);
+    // NOTE: This probably needs to be `scope` for me to be able to store
+    // the result of this function a variable
+    ChunkRef opIndex(int index) return => ChunkRef(&this, index);
 
-    int opApply(int delegate(ChunkRef) ops)
+    int opApply(CallbackType : int delegate(ChunkRef))(CallbackType ops)
     {
         int result = 0;
         for (int i = 0; i < this.count; i++) {

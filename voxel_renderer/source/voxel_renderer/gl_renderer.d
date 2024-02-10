@@ -73,7 +73,7 @@ struct MeshContainer
         not GPU
     */
     // I guess I will need a simpler header for the second vbo, perhaps only the size
-    ChunksHeader header; // contains info on what arrays are bound to what places
+    ChunksHeader chunks_header; // contains info on what arrays are bound to what places
 
     MemHeader cpu_header;
     // Chunk of buffers
@@ -92,7 +92,7 @@ struct MeshContainer
     {
         this.max_face_count = count * max_chunk_face_count;
         this.face_meshes.reserve(max_face_count);
-        this.header = ChunksHeader(CHUNK_HEADER_CAP);
+        this.chunks_header = ChunksHeader(CHUNK_HEADER_CAP);
         this.cpu_header = MemHeader(this.max_face_count);
 
         if (tmp_chunk_buffer.length == 0) {
@@ -119,7 +119,7 @@ struct MeshContainer
     {
         import std.stdio;
         // out of memory
-        if (this.header.is_full()) {
+        if (this.chunks_header.is_full()) {
             debug {
                 writeln("[WARNING]: Out of memory");
             }
@@ -131,15 +131,18 @@ struct MeshContainer
         /* assert(!this.header.full()); */
 
         // TODO: Create a ChunkInfo first and append later
-        int header_id = this.header.append(ChunkInfo());
         int mem_start = this.cpu_header.allocate(this.buff_size);
 
         assert(mem_start >= 0);
 
-        this.header[header_id].coords = chunk_pos.array;
-        this.header[header_id].index = mem_start;
-        this.header[header_id].size = this.buff_size; // we don't know size until we create mesh
-        this.header[header_id].modified = true;
+        ChunkInfo chunk_info = ChunkInfo(
+            coords: chunk_pos.array,
+            index: mem_start,
+            size: this.buff_size,
+            modified: true
+        );
+
+        int header_id = this.chunks_header.append(chunk_info);
 
         face_meshes ~= tmp_chunk_buffer[0..buff_size];
 
@@ -165,7 +168,7 @@ struct MeshContainer
 
     void[] get_chunk_buffer(int index)
     {
-        ChunkInfo info = this.header[index].info;
+        ChunkInfo info = this.chunks_header[index].info;
         return cast(void[])this.face_meshes[info.index..info.end];
     }
 }
@@ -280,13 +283,13 @@ class VoxelRenderer(ChunkT)
     void render_chunk(ivec3 cpos)
     {
         import std.stdio;
-        int id = this.mesh_buffer.header.find(cpos.array);
+        int id = this.mesh_buffer.chunks_header.find(cpos.array);
 
         if (id == ChunksHeader.NULL_ID) {
             return;
         }
 
-        auto info = this.mesh_buffer.header[id].info;
+        auto info = this.mesh_buffer.chunks_header[id].info;
         /* import std.stdio; */
         /* writeln(this.mesh_buffer.face_meshes[info.index]); */
         // send uniform
