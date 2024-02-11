@@ -14,6 +14,9 @@
 - **[VADGL]** Add paranoid mode
 - [LOW IMPORTANCE] Maybe use sdl2 wrapper in the future
 
+## NOTES:
+- Read about brokering servers (the better peer-to-peer)
+
 ## Old TODO
 - Creating fucking client
 - ~~Write basic code for the world~~
