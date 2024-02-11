@@ -137,6 +137,25 @@ struct Packed
     }
 }
 
+/+
+    NOTE: I'm still figuring out the general interface for this thing.
+    I will learn a bunch of stuff if I ever rewrite this on another framework.
+
+    Though the only real thing I would use asides from OpenGL is Vulkan since I'm
+    not touching Metal or DirectX.
+
+    NOTE: Yeah, so I'm having a lot of trouble on the difference between "device" and
+    "renderer" in my case. For now the only difference is that the "device" doesn't
+    depend on the "world" (though it's meant to be used to render said world).
+
+    For the time being I guess the device can just hold the state of the OpenGL stuff
+    and have "convenience" functions
+
+    TODO: Maybe serialize cubes or faces into "rendering commands" that will
+    send vertex data into multiple vbos.
+    Then make `multi_render(ivec3[] chunk_coords)` which will render all those
+    vertices.
++/
 // Device for instance rendering
 class GLDevice : VoxelDevice
 {
@@ -281,6 +300,7 @@ class GLDevice : VoxelDevice
         /* gl_clear_color(1.0, 1.0, 1.0f, 1.0f); */
     }
 
+    // NOTE: Prob shouldn't be used
     void commit_face(ivec3 pos, Color4b color, uint face_id, uint material)
     {
         this.buffer ~= pos.array;
@@ -297,7 +317,33 @@ class GLDevice : VoxelDevice
         }
     }
 
-    void send_to_device(void[] buff)
+    void allocate_main_buffer(long size)
+    {
+        vbo.bind().throw_on_error();
+        vbo.set_data(size, null, GL_STATIC_DRAW).throw_on_error();
+        vbo.disable();
+    }
+
+    // This would be system because data may not have enough space
+    void send_to_main_buffer(long offset, long size, const(void*) data)
+    {
+        vbo.bind().throw_on_error();
+        vbo.set_sub_data(offset, size, data).throw_on_error();
+        vbo.disable();
+    }
+
+    // This is safe
+    void send_to_main_buffer(long offset, const(void[]) data)
+        => send_to_main_buffer(offset, data.length, data.ptr);
+
+    void send_to_tmp_buffer(long size)
+    {
+        vbo.bind().throw_on_error();
+        vbo.set_data(size, null, GL_STATIC_DRAW).throw_on_error();
+        vbo.disable();
+    }
+
+    void send_to_device(void[] buff) // Send and allocate shit
     {
         vbo.bind().throw_on_error();
         vbo.set_data(buff, GL_STATIC_DRAW).throw_on_error();
@@ -318,14 +364,13 @@ class GLDevice : VoxelDevice
         - glMultiDrawElementsIndirect
         - glDrawElementsIndirect
     */
-    void multi_render()
+    void multi_render(ivec3[] chunk_coords, int[] indices)
     {
         assert(0, "Not implmeented yet");
     }
 
     void render(uint start, uint count)
     {
-        import std.stdio;
         enable_gl_settings();
         program.use().throw_on_error();
 

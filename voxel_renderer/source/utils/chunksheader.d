@@ -44,7 +44,7 @@ struct ChunkRef
     @disable this();
 
     @safe @nogc nothrow
-    this(ChunksHeader* header, int header_id) pure
+    this(ChunksHeader* header, int header_id)
     {
         this.header = header;
         this.header_id = header_id;
@@ -77,8 +77,7 @@ int end(T)(T chunk_info) if (is(T == ChunkInfo) || is(T == ChunkRef))
 
 struct ChunksHeader
 {
-    //------ ALL HERE IS @safe NOTHROW
-    @safe nothrow:
+    //------ ALL HERE IS @safe nothrow
 
     enum int NULL_ID = -1;
 
@@ -90,6 +89,7 @@ struct ChunksHeader
     int[] sizes;
     bool[] modified;
 
+    @safe nothrow
     bool is_full() const pure => this.count >= this.cap;
 
     @disable this(); // NO DEFAULT CONSTRUCTOR ALLOWED
@@ -104,6 +104,7 @@ struct ChunksHeader
         this.modified = new bool[](size);
     }
 
+    @safe nothrow
     int append(ChunkInfo info)
     {
         if (this.count >= cap)
@@ -117,6 +118,7 @@ struct ChunksHeader
         return this.count++;
     }
 
+    @safe nothrow
     int find(int[3] pos)
     {
         import std.algorithm    : countUntil;
@@ -124,6 +126,7 @@ struct ChunksHeader
         return cast(int)this.coords.countUntil(pos);
     }
 
+    @safe nothrow
     void remove(int index) in (index >=0 && index < this.count)
     {
         import std.algorithm    : remove;
@@ -136,13 +139,15 @@ struct ChunksHeader
 
     // NOTE: This probably needs to be `scope` for me to be able to store
     // the result of this function a variable
+    @safe nothrow
     ChunkRef opIndex(int index) return => ChunkRef(&this, index);
 
-    int opApply(CallbackType : int delegate(ChunkRef))(CallbackType ops)
+    int opApply(T)(T ops) if (is(T : int delegate(ref ChunkRef)))
     {
         int result = 0;
         for (int i = 0; i < this.count; i++) {
-            result = ops(this[i]);
+            ChunkRef chunk_ref = this[i]; // So that I can get a reference
+            result = ops(chunk_ref);
             if (result)
                 return result;
         }

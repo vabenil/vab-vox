@@ -162,7 +162,7 @@ struct MeshContainer
     /*     } */
     /* } */
 
-    ulong vertex_buffer_size() const pure => face_meshes.length * VoxelVertex.sizeof;
+    ulong vertex_buffer_size() const pure => face_meshes.capacity * VoxelVertex.sizeof;
 
     void[] get_buffer() const => cast(void[])this.face_meshes;
 
@@ -208,18 +208,12 @@ class VoxelRenderer(ChunkT)
     {
         enum int chunk_size = ChunkT.voxel_count * 6 / 2;
         this.device = device;
-        this.mesh_buffer = MeshContainer(12, chunk_size);
+        this.mesh_buffer = MeshContainer(6, chunk_size);
     }
 
-    VoxelDevice get_device() => device;
+    GLDevice get_device() => device;
 
     void set_camera(vec3 pos, vec3 dir, vec3 up) {}
-
-    void commit_voxel_face_(int face_id, ivec3 cpos, ivec3 pos)
-    {
-        /* container.push_face(); */
-        device.commit_face(pos, Color4b.WHITE, face_id, 0);
-    }
 
     // NOTE: This has no effect if `commit_chunk` is not used
     void commit_voxel_face(Color4b color, int face_id, ivec3 pos)
@@ -264,7 +258,25 @@ class VoxelRenderer(ChunkT)
         mesh_buffer.push_chunk(cpos);
     }
 
-    void send_to_device() => device.send_to_device(mesh_buffer.get_buffer());
+    void allocate_buffers()
+    {
+        device.allocate_main_buffer(mesh_buffer.vertex_buffer_size());
+    }
+
+    void send_to_device()
+    {
+        import std.stdio;
+        foreach (ChunkRef chunk_info; mesh_buffer.chunks_header) {
+            int index = chunk_info.index,
+                size = chunk_info.size;
+
+            void[] buffer_slice = cast(void[])(mesh_buffer.face_meshes[index..index+size]);
+            if (chunk_info.modified) {
+                device.send_to_main_buffer(index * VoxelVertex.sizeof, buffer_slice);
+                chunk_info.modified = false;
+            }
+        }
+    }
 
     void commit_chunk(ref const BitChunk bit_chunk, ref const ChunkT chunk, ivec3 cpos) {}
 
@@ -282,7 +294,6 @@ class VoxelRenderer(ChunkT)
 
     void render_chunk(ivec3 cpos)
     {
-        import std.stdio;
         int id = this.mesh_buffer.chunks_header.find(cpos.array);
 
         if (id == ChunksHeader.NULL_ID) {
@@ -290,8 +301,6 @@ class VoxelRenderer(ChunkT)
         }
 
         auto info = this.mesh_buffer.chunks_header[id].info;
-        /* import std.stdio; */
-        /* writeln(this.mesh_buffer.face_meshes[info.index]); */
         // send uniform
         this.device.set_chunk_pos(cpos);
         this.device.set_chunk_size(ChunkT.size);
