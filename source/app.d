@@ -28,8 +28,10 @@ struct GState
 {
     /* enum int WINDOW_WIDTH = 960; */
     /* enum int WINDOW_HEIGHT = 540; */
-    enum int WINDOW_WIDTH = 1152;
-    enum int WINDOW_HEIGHT = 648;
+    /* enum int WINDOW_WIDTH = 1152; */
+    /* enum int WINDOW_HEIGHT = 648; */
+    enum int WINDOW_WIDTH = 1920;
+    enum int WINDOW_HEIGHT = 1080;
 
     bool grab_mouse = true;
     bool quit = false;
@@ -119,17 +121,18 @@ void init_globals()
     gstate.camera.set_direction((target - gstate.camera.pos).normalized);
     gstate.camera.look_at(); // calculate view matrix
 
-    gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox");
+    /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
     /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
     /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
     /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
-    /* gstate.world.load_from_vox_file("./assets/11.vox"); */
+    gstate.world.load_from_vox_file("./assets/11.vox");
 
 }
 
 void init_graphics()
 {
     gstate.win = Window("Voxel engine", GState.WINDOW_WIDTH, GState.WINDOW_HEIGHT, GLVersion.GL42);
+    gstate.win.set_vsync(false);
 
     /* SDL_SetRelativeMouseMode(gstate.grab_mouse); // wrap this in Window */
     glClearColor(0.3, 0.3, 0.3, 1); // wrap this in vadgl
@@ -138,7 +141,7 @@ void init_graphics()
     device.device_init();
 
     gstate.renderer = new VoxelRenderer!MChunk(device);
-
+    gstate.renderer.allocate_buffers();
 
     foreach (pos, chunk; gstate.world) {
         gstate.renderer.commit_chunk(chunk, pos);
@@ -178,14 +181,15 @@ void main_loop()
         foreach (pos, chunk; gstate.world) {
             gstate.renderer.render_chunk(pos);
         }
-        /* gstate.renderer.render_chunk(IVec3(1, 0, 0)); */
-        /* renderer.get_device().render(); */
         gstate.win.swap_buffer();
 
         watch.stop();
         double avg_dur = duration_sum / ticks;
         double fps = 1_000_000 / avg_dur; // don't count writeln
-        writeln(cast(int)fps);
+
+        if (ticks % 10 == 0)
+            writeln(cast(int)fps);
+
         duration_sum += watch.peek.total!"usecs";
         ticks++;
     }
