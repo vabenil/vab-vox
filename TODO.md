@@ -8,6 +8,7 @@
 - [IMPORTANT]: On windows there's problems handling input, likely related to
     how grabbing the mouse and focus works differently on windows, FIX pls
 - Add `vadg` it as a external repo **[in_progress]**
+- Add proper logging
 - Create a visualization utility for Quad trees to help myself
 - Make a way to render chunks
 - **[VADGL]** Add abstractions for working with textures with `vadgl`
