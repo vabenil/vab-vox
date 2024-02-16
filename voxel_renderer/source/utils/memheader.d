@@ -1,5 +1,7 @@
+/+
+    TODO: Make a `MemSliceHeader` that will be a slice of the MemHeader
++/
 module utils.memheader;
-
 
 import std.typecons     : Tuple;
 import std.meta         : allSatisfy, ApplyRight;
@@ -55,16 +57,17 @@ struct MemHeader
         this.mem_blocks.reserve(mem_block_init_cap);
     }
 
-    @property
+    @property @safe @nogc nothrow
     int unused() const pure => this.capacity - this.used;
 
     int allocate(int size)
-    in (this.unused >= size, "Not enough space")
+    /* in (this.unused >= size, "Not enough space") */
     {
         import std.array    : insertInPlace;
         int mem_block_i = this.find_free_mem(size);
 
-        assert(mem_block_i != -1);
+        if (mem_block_i == -1)
+            return -1;
 
         // new block starts at end of previous block
         int start = (mem_block_i) ? this.mem_blocks[mem_block_i-1].end : 0;
@@ -74,6 +77,23 @@ struct MemHeader
         this.used += size;
         // Return start of `MemRange`
         return start;
+    }
+
+    // TODO: Make @nogc
+    // Allocate at the end of the buffer
+    int quick_allocate(int size)
+    /* in (this.unused >= size, "Not enough space") */
+    {
+        import std.stdio;
+
+        int start = (this.mem_blocks.length) ? this.mem_blocks[$-1].end : 0;
+        if (this.capacity - start >= size) {
+            // Update `used` 
+            this.used += size;
+            this.mem_blocks ~= MemRange(start, start+size);
+            return start;
+        }
+        return -1; // not enough space
     }
 
     /++
@@ -133,10 +153,15 @@ struct MemHeader
         -1 if there's no spot big enough to fit memblock.
      +/
     int find_free_mem(int size) const
-    in (size <= this.capacity)
     {
         immutable(int) block_count = cast(int)this.mem_blocks.length;
 
+        /// Optimization: Put checks elsewhere, so that they are run only
+        // when absolutely necessary
+        if (size > this.capacity)
+            return -1;
+
+        // No memory blocks so the whole buffer is free real state
         if (block_count == 0)
             return 0;
 
@@ -149,17 +174,17 @@ struct MemHeader
             return block_count;
 
         // Search free space between blocks
-        for (int i = 0; i < block_count; i++) {
+        for (int i = 1; i < block_count; i++) {
             // Check if there's enough space between mem_blocks
-            MemRange mem_block = this.mem_blocks[i];
+            MemRange mem_block = this.mem_blocks[i-1];
 
             int free_start = mem_block.end;
-            int free_end = mem_blocks[i+1].start;
+            int free_end = mem_blocks[i].start;
 
             int free_space = free_end - free_start;
 
             if (free_space >= size)
-                return i+1;
+                return i;
         }
         return -1;
     }
