@@ -28,10 +28,10 @@ struct GState
 {
     /* enum int WINDOW_WIDTH = 960; */
     /* enum int WINDOW_HEIGHT = 540; */
-    /* enum int WINDOW_WIDTH = 1152; */
-    /* enum int WINDOW_HEIGHT = 648; */
-    enum int WINDOW_WIDTH = 1920;
-    enum int WINDOW_HEIGHT = 1080;
+    enum int WINDOW_WIDTH = 1152;
+    enum int WINDOW_HEIGHT = 648;
+    /* enum int WINDOW_WIDTH = 1920; */
+    /* enum int WINDOW_HEIGHT = 1080; */
 
     bool grab_mouse = true;
     bool quit = false;
@@ -123,9 +123,9 @@ void init_globals()
 
     /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
     /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
-    /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
+    gstate.world.load_from_vox_file("./assets/realistic_terrain.vox");
     /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
-    gstate.world.load_from_vox_file("./assets/11.vox");
+    /* gstate.world.load_from_vox_file("./assets/11.vox"); */
 
 }
 
@@ -149,7 +149,9 @@ void init_graphics()
 
     gstate.renderer.send_to_device();
 
-    writeln("face count - ", gstate.renderer.mesh_buffer.face_meshes.length);
+    writeln("face count - ",
+            gstate.renderer.mesh_buffer.cpu_header.used +
+            gstate.renderer.mesh_buffer.tmp_header.used);
 }
 
 void main_loop()
@@ -179,7 +181,7 @@ void main_loop()
         gstate.renderer.get_device().set_mpv_matrix(gstate.camera.mpv(), true);
 
         foreach (pos, chunk; gstate.world) {
-            gstate.renderer.render_chunk(pos);
+            gstate.renderer.render_chunk(pos, chunk);
         }
         gstate.win.swap_buffer();
 
