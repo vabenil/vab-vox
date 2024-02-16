@@ -19,7 +19,7 @@ struct World(ChunkT)
         if (ChunkT* chunk = chunk_pos in this.chunk_map) {
             (*chunk)[rel_pos.array] = voxel;
         }
-        else {
+        else if (!voxel.is_empty()) {
             chunk_map[chunk_pos] = ChunkT();
             chunk_map[chunk_pos][rel_pos.array] = voxel;
         }
