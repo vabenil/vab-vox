@@ -8,10 +8,10 @@
 		"bindbc-sdl": "1.4.2",
 		"inmath": "~>1.0.5",
 		"vox-d": "~>1.0.0",
-		"vox_engine:common": ">=0.0.0",
-		"vox_engine:voxel_grid": ">=0.0.0",
-		"vox_engine:vadgl": ">=0.0.0",
-		"vox_engine:voxel_renderer": ">=0.0.0"
+		"vox_engine:common": { "path": "./common" },
+		"vox_engine:voxel_grid": { "path": "./voxel_grid" },
+		"vox_engine:vadgl": { "path": "./vadgl" },
+		"vox_engine:voxel_renderer": { "path": "./voxel_renderer" }
 	},
 	"description": "A fast Voxel engine in D",
 	"license": "MIT",
