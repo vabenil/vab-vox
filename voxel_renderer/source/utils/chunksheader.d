@@ -89,8 +89,14 @@ struct ChunksHeader
     int[] sizes;
     bool[] modified;
 
+    @property @safe @nogc nothrow
+    int length() const pure => this.count;
+
     @safe nothrow
     bool is_full() const pure => this.count >= this.cap;
+
+    @safe nothrow
+    int unused() const pure => this.cap - this.count;
 
     @disable this(); // NO DEFAULT CONSTRUCTOR ALLOWED
 
@@ -123,7 +129,7 @@ struct ChunksHeader
     {
         import std.algorithm    : countUntil;
 
-        return cast(int)this.coords.countUntil(pos);
+        return cast(int)this.coords[0..count].countUntil(pos);
     }
 
     @safe nothrow
@@ -136,6 +142,9 @@ struct ChunksHeader
 
         this.count--;
     }
+
+    @safe @nogc nothrow
+    void clear() pure { this.count = 0; }
 
     // NOTE: This probably needs to be `scope` for me to be able to store
     // the result of this function a variable
