@@ -40,17 +40,21 @@ struct World(ChunkT)
     {
         import voxd;
         import common.color;
-        import std.stdio;
         import std.range    : iota;
         import std.parallelism;
+
+        import std.stdio;
 
         // alternatively: decodeVOXFromMemory(ubyte[] data)
         VOX model = decodeVOXFromFile(vox_path);
 
-        writefln("width = %s", model.width);
-        writefln("height = %s", model.height);
-        writefln("depth = %s", model.depth);
-        writefln("That makes %s voxels total", model.numVoxels());
+        debug {
+            writefln(`### Loading model from vox file "%s"...`, vox_path);
+            writefln("width = %s", model.width);
+            writefln("height = %s", model.height);
+            writefln("depth = %s", model.depth);
+            writefln("That makes %s voxels total", model.numVoxels());
+        }
 
         for (int k = 0; k < model.depth; k++)
         for (int j = 0; j < model.height; j++)
@@ -63,7 +67,7 @@ struct World(ChunkT)
                 this[IVec3(i, k, j)] = VoxelT(color_.to_hex());
             }
         }
-        writeln("Model loaded!");
+        debug writeln("### Model loaded!");
     }
 
     int opApply(int delegate(IVec3 cpos, ref ChunkT chunk) ops)
