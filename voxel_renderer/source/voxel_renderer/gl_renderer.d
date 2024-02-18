@@ -200,6 +200,12 @@ struct MeshContainer
         return header_id;
     }
 
+    void clear_tmp()
+    {
+        this.tmp_chunks_header.clear();
+        this.tmp_header.clear();
+    }
+
     /* void free_chunk(ivec3 chunk_pos) */
     /* { */
     /*     for (int i = 0; i < this.header.count; i++) { */
@@ -253,12 +259,9 @@ class VoxelRenderer(ChunkT)
 
     this(GLDevice device)
     {
-        import std.stdio;
-
         enum int chunk_size = ChunkT.voxel_count * 6 / 2;
         this.device = device;
         this.mesh_buffer = MeshContainer(1, chunk_size);
-        writeln("buffer capacity - ", mesh_buffer.cpu_header.capacity);
     }
 
     GLDevice get_device() => device;
@@ -313,6 +316,13 @@ class VoxelRenderer(ChunkT)
         mesh_buffer.push_chunk(cpos);
     }
 
+    void commit_tmp_chunk(ref const ChunkT chunk, ivec3 cpos)
+    {
+        create_chunk_mesh(chunk, cpos);
+        mesh_buffer.push_tmp_chunk(cpos);
+    }
+
+
     void allocate_buffers()
     {
         device.allocate_main_buffer(mesh_buffer.vertex_buffer_size());
@@ -321,7 +331,7 @@ class VoxelRenderer(ChunkT)
     void send_tmp_to_device()
     {
         import std.stdio;
-        writeln("### Sending chunks to tmp buffer...");
+        debug writeln("### Sending chunks to tmp buffer...");
         // render tmp if exists
         foreach (ChunkRef chunk_ref; mesh_buffer.tmp_chunks_header) {
             debug writeln("send ", chunk_ref.info, " to device"); 
@@ -333,9 +343,6 @@ class VoxelRenderer(ChunkT)
             }
         }
 
-        // Delete tmp since it's already on device
-        /* this.mesh_buffer.tmp_chunks_header.clear(); */
-        /* this.mesh_buffer.tmp_header.clear(); */
         debug writeln("### ALL tmp chunks sent");
     }
 
@@ -352,7 +359,7 @@ class VoxelRenderer(ChunkT)
         send_tmp_to_device();
     }
 
-    void commit_chunk(ref const BitChunk bit_chunk, ref const ChunkT chunk, ivec3 cpos) {}
+    /* void commit_chunk(ref const BitChunk bit_chunk, ref const ChunkT chunk, ivec3 cpos) {} */
 
     void commit_voxel(VoxelT voxel, ivec3 pos)
     {
@@ -368,8 +375,6 @@ class VoxelRenderer(ChunkT)
 
     void render_cached_chunk(ChunkInfo info) // should be private
     {
-        import std.stdio;
-
         this.device.set_chunk_pos(ivec3(info.coords));
         this.device.set_chunk_size(ChunkT.size);
         this.device.render(info.index, info.size);
@@ -381,23 +386,24 @@ class VoxelRenderer(ChunkT)
     +/
     void render_chunk(ivec3 cpos, ref ChunkT chunk)
     {
-        import std.stdio;
         int id = this.mesh_buffer.chunks_header.find(cpos.array);
 
         ChunkInfo info;
-        // TODO: create meshes on tmp buffer
         if (id == ChunksHeader.NULL_ID) {
-            // check if it's already on tmp_buffer
             id = this.mesh_buffer.tmp_chunks_header.find(cpos.array);
-            // there should always be space on the tmp header for at least 1 element
-            if (id == ChunksHeader.NULL_ID) {
-                // Ok it's not even on tmp buffer.
-                // so empty tmp buffer and append chunk
-                writeln("Couldn't find ", cpos, " in cache");
+
+            // TODO: Flush buffer
+            if (id == ChunksHeader.NULL_ID) { // Create & upload mesh
+                this.mesh_buffer.clear_tmp();
+                this.commit_tmp_chunk(chunk, cpos);
+                this.send_tmp_to_device();
+
+                id = this.mesh_buffer.tmp_chunks_header.find(cpos.array);
             }
-            else {
-                info = this.mesh_buffer.tmp_chunks_header[id].info;
-            }
+
+            assert(id != ChunksHeader.NULL_ID);
+
+            info = this.mesh_buffer.tmp_chunks_header[id].info;
         }
         else {
             info = this.mesh_buffer.chunks_header[id].info;
@@ -406,9 +412,5 @@ class VoxelRenderer(ChunkT)
     }
 
     // Render multiple chunks
-    void render_chunks(ivec3[] chunk_positions)
-    {
-    }
-
-    void flush() {}
+    void render_chunks(ivec3[] chunk_positions) { }
 }
