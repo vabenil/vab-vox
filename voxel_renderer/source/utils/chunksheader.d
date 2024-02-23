@@ -32,6 +32,15 @@ struct ChunkInfo
     int index;
     int size;
     bool modified;
+    bool queued;
+
+    bool is_adjacent(ChunkInfo info)
+    {
+        return (
+            this.index == (info.index + info.size) || // adjacent to the right
+            (this.index + this.size) == info.index // Adja cent to the left
+        );
+    }
 }
 
 struct ChunkRef
@@ -69,7 +78,10 @@ struct ChunkRef
     @property
     ref inout(bool) modified() return inout => header.modified[header_id];
 
-    ChunkInfo info() => ChunkInfo(this.coords, this.index, this.size, this.modified);
+    @property
+    ref inout(bool) queued() return inout => header.queued[header_id];
+
+    ChunkInfo info() => ChunkInfo(this.coords, this.index, this.size, this.modified, this.queued);
 }
 
 int end(T)(T chunk_info) if (is(T == ChunkInfo) || is(T == ChunkRef))
@@ -88,6 +100,7 @@ struct ChunksHeader
     int[] indices;
     int[] sizes;
     bool[] modified;
+    bool[] queued; // queued for rendering
 
     @property @safe @nogc nothrow
     int length() const pure => this.count;
@@ -108,8 +121,10 @@ struct ChunksHeader
         this.indices = new int[](size);
         this.sizes = new int[](size);
         this.modified = new bool[](size);
+        this.queued = new bool[](size);
     }
 
+    // Shit is not sorted
     @safe nothrow
     int append(ChunkInfo info)
     {
@@ -120,6 +135,7 @@ struct ChunksHeader
         this.indices[this.count] = info.index;
         this.sizes[this.count] = info.size;
         this.modified[this.count] = info.modified;
+        this.queued[this.count] = info.queued;
 
         return this.count++;
     }
