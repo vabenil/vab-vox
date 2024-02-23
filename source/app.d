@@ -11,7 +11,7 @@ import sdl_ehandler;
 import world;
 
 import common.color;
-import common.types     : IVec3 = ivec3;
+import common.types     : IVec3 = ivec3, vec;
 import voxel_grid.chunk;
 import voxel_grid.voxel;
 
@@ -121,6 +121,7 @@ void init_globals()
     gstate.camera.set_direction((target - gstate.camera.pos).normalized);
     gstate.camera.look_at(); // calculate view matrix
 
+    gstate.world = new World!MChunk();
     /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
     /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
     gstate.world.load_from_vox_file("./assets/realistic_terrain.vox");
@@ -144,7 +145,7 @@ void init_graphics()
     gstate.renderer.allocate_buffers();
 
     foreach (pos, chunk; gstate.world) {
-        gstate.renderer.commit_chunk(chunk, pos);
+        gstate.renderer.commit_chunk(chunk, pos.vec());
     }
 
     gstate.renderer.send_to_device();
@@ -181,8 +182,10 @@ void main_loop()
         gstate.renderer.get_device().set_mpv_matrix(gstate.camera.mpv(), true);
 
         foreach (pos, chunk; gstate.world) {
-            gstate.renderer.render_chunk(pos, chunk);
+            gstate.renderer.queue_chunk(pos.vec(), chunk);
         }
+        gstate.renderer.render();
+
         gstate.win.swap_buffer();
 
         watch.stop();
