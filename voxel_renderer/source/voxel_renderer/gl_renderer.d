@@ -19,10 +19,12 @@ import std.typecons     : Tuple, tuple;
 
 import voxel_renderer.gl_device;
 
+import voxel_grid.world;
 import voxel_grid.chunk;
 import voxel_grid.bitchunk;
 
-import common   : ivec3, vec3, Color4b;
+import common           : ivec3, vec3, Color4b;
+import std.typecons     : Optional = Nullable, optional = nullable;
 
 
 private enum int[3][3] mat3_identity = [
@@ -206,6 +208,19 @@ struct MeshContainer
         this.tmp_header.clear();
     }
 
+    Optional!ChunkRef get_chunk_header(ivec3 cpos)
+    {
+        int id = this.chunks_header.find(cpos.array);
+
+        if (id == ChunksHeader.NULL_ID) {
+            id = this.tmp_chunks_header.find(cpos.array);
+            if (id == ChunksHeader.NULL_ID)
+                return Optional!ChunkRef();
+            return this.tmp_chunks_header[id].optional;
+        }
+        return this.chunks_header[id].optional;
+    }
+
     /* void free_chunk(ivec3 chunk_pos) */
     /* { */
     /*     for (int i = 0; i < this.header.count; i++) { */
@@ -261,7 +276,7 @@ class VoxelRenderer(ChunkT)
     {
         enum int chunk_size = ChunkT.voxel_count * 6 / 2;
         this.device = device;
-        this.mesh_buffer = MeshContainer(1, chunk_size);
+        this.mesh_buffer = MeshContainer(4, chunk_size);
     }
 
     GLDevice get_device() => device;
@@ -316,10 +331,10 @@ class VoxelRenderer(ChunkT)
         mesh_buffer.push_chunk(cpos);
     }
 
-    void commit_tmp_chunk(ref const ChunkT chunk, ivec3 cpos)
+    int commit_tmp_chunk(ref const ChunkT chunk, ivec3 cpos)
     {
         create_chunk_mesh(chunk, cpos);
-        mesh_buffer.push_tmp_chunk(cpos);
+        return mesh_buffer.push_tmp_chunk(cpos);
     }
 
 
@@ -328,6 +343,7 @@ class VoxelRenderer(ChunkT)
         device.allocate_main_buffer(mesh_buffer.vertex_buffer_size());
     }
 
+    // NOTE: I could call this shit "sync". That sounds better
     void send_tmp_to_device()
     {
         import std.stdio;
@@ -369,9 +385,32 @@ class VoxelRenderer(ChunkT)
         }
     }
 
-    void render() => device.render(cast(int)this.mesh_buffer.face_meshes.length);
+    void render_header(ref ChunksHeader header)
+    {
+        int[] chunk_counts;
+        // TODO: Stop using magic numbers!!!
+        // TODO: We have to swap and do a bunch of bs
+        ChunkInfo[32][] ChunkBatch;
+        foreach (ChunkRef chunk_ref; header) {
+            if (chunk_ref.queued) {
+                // Add this chunk to a batch
+                render_cached_chunk(chunk_ref.info);
+                chunk_ref.queued = false;
+            }
+        }
+    }
 
-    /* void render(uint start, uint count) => device.render(start, count); */
+    // TODO: No way to render chunks in batches yet, Fix that
+    /// Render everything in tmp buffer and clear it
+    void flush()
+    {
+        /* writeln("chunk headers free: ", mesh_buffer.tmp_chunks_header.unused); */
+        send_tmp_to_device(); // make sure tmp buffers are on device
+
+        // TODO: This function could be called render_cached
+        render_header(this.mesh_buffer.tmp_chunks_header);
+        this.mesh_buffer.clear_tmp();
+    }
 
     void render_cached_chunk(ChunkInfo info) // should be private
     {
@@ -380,37 +419,67 @@ class VoxelRenderer(ChunkT)
         this.device.render(info.index, info.size);
     }
 
+    // TODO: Make a proper render queue, with rendering commands,
+    // for rendering chunks in batches
+    // TODO: Searching for a chunk_header is kinda of a pain. Make that easier
+    /// Queue chunk for rendering may
+    void queue_chunk(ivec3 cpos, ref ChunkT chunk)
+    {
+        Optional!ChunkRef cached = this.mesh_buffer.get_chunk_header(cpos);
+
+        if (!cached.isNull) {
+            cached.get.queued = true;
+        }
+        else { // Chunk is not cached
+            int id = this.commit_tmp_chunk(chunk, cpos);
+
+            if (id == ChunksHeader.NULL_ID) { // not enough space
+                this.flush();
+                // the mesh is already created, just try to alllocate it on header
+                id = this.mesh_buffer.push_tmp_chunk(cpos);
+                assert(id != ChunksHeader.NULL_ID);
+            }
+
+            this.send_tmp_to_device();
+            this.mesh_buffer.tmp_chunks_header[id].queued = true;
+        }
+    }
+
+    void render()
+    {
+        // Render main buffer
+        render_header(this.mesh_buffer.chunks_header);
+        // Render tmp
+        render_header(this.mesh_buffer.tmp_chunks_header);
+    }
+
+    /* void render(uint start, uint count) => device.render(start, count); */
+
     /++
         Render chunk in `cpos`. Requires passing `chunk` in case mesh is not
         cached
     +/
     void render_chunk(ivec3 cpos, ref ChunkT chunk)
     {
-        int id = this.mesh_buffer.chunks_header.find(cpos.array);
+        ChunkRef chunk_ref = void;
+        Optional!ChunkRef cached = this.mesh_buffer.get_chunk_header(cpos);
 
-        ChunkInfo info;
-        if (id == ChunksHeader.NULL_ID) {
-            id = this.mesh_buffer.tmp_chunks_header.find(cpos.array);
-
-            // TODO: Flush buffer
-            if (id == ChunksHeader.NULL_ID) { // Create & upload mesh
-                this.mesh_buffer.clear_tmp();
-                this.commit_tmp_chunk(chunk, cpos);
-                this.send_tmp_to_device();
-
-                id = this.mesh_buffer.tmp_chunks_header.find(cpos.array);
-            }
-
-            assert(id != ChunksHeader.NULL_ID);
-
-            info = this.mesh_buffer.tmp_chunks_header[id].info;
+        if (!cached.isNull) {
+            chunk_ref = cached.get;
         }
-        else {
-            info = this.mesh_buffer.chunks_header[id].info;
+        else { // Chunk is not cached
+            this.flush();
+
+            int id = this.commit_tmp_chunk(chunk, cpos);
+            this.send_tmp_to_device();
+
+            chunk_ref = this.mesh_buffer.tmp_chunks_header[id];
         }
-        render_cached_chunk(info);
+        render_cached_chunk(chunk_ref.info);
+
+        chunk_ref.queued = false;
     }
 
     // Render multiple chunks
-    void render_chunks(ivec3[] chunk_positions) { }
+    void render_chunks(ivec3[] chunk_positions, VoxelWorld!ChunkT world) { }
 }
