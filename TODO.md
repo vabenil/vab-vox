@@ -1,6 +1,10 @@
 ## TODO:
+- [PRIORITY]: Organize this damned code base, it's a mess.
+- [PRIORITY]: Set up pipeline
 - [PRIORITY]: ~~Add temporal buffer for chunk rendering~~
 - [PRIORITY]: ~~Allow arbitrary number of chunks in header~~
+- [IMPORTANT]: Do batch rendering for chunks
+- [IMPORTANT]: Do backface culling
 - [IMPORTANT]: Fix windows bug where on some machines games don't work
 - [IMPORTANT]: Actually start using multiple threads
 - [IMPORTANT]: Make a GUI to make stuff easier
@@ -24,9 +28,7 @@
 - Make the fucking the database (May use something else)
 - ~~Write the fucking OpenGL rasterizer renderer~~
 - Create fucking server **[not_important]**
-
 - Be happy
-
 - Improve fucking shaders so that stuff doesn't look like shit
 
 ### Extra
