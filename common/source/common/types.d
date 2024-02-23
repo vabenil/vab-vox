@@ -5,7 +5,7 @@ private import std.format       : format;
 private import std.algorithm    : among;
 
 // all here is SAFE and no heap ALLOCATIONS will happen in this module
-@safe @nogc:
+@safe @nogc nothrow:
 
 alias vec3 = Vector!(float, 3);
 alias ivec3 = Vector!(int, 3);
@@ -95,6 +95,9 @@ struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
         return typeid(BT[N]).getHash(&this);
     }
 }
+
+// Convenience function to convert to vector
+Vector!(T, N) vec(T, ulong N)(T[N] arr) pure => Vector!(T, N)(arr);
 
 unittest
 {
