@@ -18,6 +18,27 @@ static immutable string vertex_source = q{
     layout(location=3) in uint packed_size;
 
     uniform int u_chunk_size;
+
+    // So the idea I guess would be to send chunk info here,
+    // And from the chunk info and InstanceID I should be able to figure out
+    // NOTE: It would be much better to either use a uniform buffer, or just
+    // and average old buffer for this shit
+    // u_chunk_pos for rendering
+    uniform int u_chunk_count;
+    // TODO: Probably add LOD later here
+
+    struct ChunkInfo
+    {
+        int pos[3];
+        int index;
+        int size;
+    };
+
+    layout(std140) uniform ChunksHeader
+    {
+        ChunkInfo chunk_header[];
+    };
+
     uniform ivec3 u_chunk_pos;
     uniform mat4 u_trans_mat;
 
@@ -210,8 +231,7 @@ class GLDevice : VoxelDevice
 
     void set_camera(vec3 pos, vec3 dir, vec3 up) {}
 
-    void enable_gl_settings()
-    {
+    void enable_gl_settings() {
         import bindbc.opengl;
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         // TODO: add this to vadgl
@@ -232,8 +252,13 @@ class GLDevice : VoxelDevice
 
         program = Program.create_program("program").throw_on_error();
 
-        foreach (shader; [&vert_sh, &frag_sh])
-            shader.compile().throw_on_error();
+        foreach (shader; [&vert_sh, &frag_sh]) {
+            if (auto res = shader.compile()) {
+                stderr.writeln(res.error.to_error_msg());
+                stderr.writeln(get_info_log(*shader).throw_on_error());
+                assert(0);
+            }
+        }
 
         program.attach(vert_sh, frag_sh).throw_on_error();
         program.link().throw_on_error;
@@ -262,6 +287,8 @@ class GLDevice : VoxelDevice
         uniforms["u_trans_mat"] = GLUniform.from_name("u_trans_mat", program.id).throw_on_error();
         uniforms["u_chunk_size"] = GLUniform.from_name("u_chunk_size", program.id).throw_on_error();
         uniforms["u_chunk_pos"] = GLUniform.from_name("u_chunk_pos", program.id).throw_on_error();
+
+        uniforms["u_chunk_count"] = GLUniform.from_name("u_chunk_count", program.id).throw_on_error();
 
         attributes = [
             "model_pos": glattribute!gl_ivec2(loc: AttribLoc.MODEL_POS, offset_: 0),
@@ -298,6 +325,12 @@ class GLDevice : VoxelDevice
         vao.disable(); // ALWAYS unbind vao first
 
         /* gl_clear_color(1.0, 1.0, 1.0f, 1.0f); */
+        int result;
+        glGetIntegerv(GL_MAX_UNIFORM_LOCATIONS, &result);
+        writeln("GL_MAX_UNIFORM_LOCATIONS: ", result);
+
+        glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &result);
+        writeln("GL_MAX_UNIFORM_BLOCK_SIZE: ", result);
     }
 
     // NOTE: Prob shouldn't be used
