@@ -87,6 +87,28 @@ struct ChunkRef
 int end(T)(T chunk_info) if (is(T == ChunkInfo) || is(T == ChunkRef))
     => chunk_info.index + chunk_info.size;
 
+
+struct ChunksHeaderRange
+{
+    int index = 0;
+    ChunksHeader* header;
+
+    @disable this();
+
+    this(ref ChunksHeader header) { this.header = &header; }
+
+    bool empty() const => (index >= header.length);
+
+    ChunkRef front() => (*header)[index];
+
+    void popFront() { index++; }
+
+    @safe nothrow
+    ChunkRef opIndex(int index) return => ChunkRef(header, index);
+
+    ChunksHeaderRange save() => this;
+}
+
 struct ChunksHeader
 {
     //------ ALL HERE IS @safe nothrow
@@ -111,6 +133,8 @@ struct ChunksHeader
     @safe nothrow
     int unused() const pure => this.cap - this.count;
 
+    alias this = range;
+
     @disable this(); // NO DEFAULT CONSTRUCTOR ALLOWED
 
     this(int size)
@@ -120,6 +144,10 @@ struct ChunksHeader
         this.coords = new int[3][](size);
         this.indices = new int[](size);
         this.sizes = new int[](size);
+
+        // TODO: This 2 fields prob better to make into their own list of shit
+        // Also. I should really add a sub-chunksheader that allocates a big
+        // block inside main header. Might be a bit complex though
         this.modified = new bool[](size);
         this.queued = new bool[](size);
     }
@@ -167,17 +195,23 @@ struct ChunksHeader
     @safe nothrow
     ChunkRef opIndex(int index) return => ChunkRef(&this, index);
 
-    int opApply(T)(T ops) if (is(T : int delegate(ref ChunkRef)))
-    {
-        int result = 0;
-        for (int i = 0; i < this.count; i++) {
-            ChunkRef chunk_ref = this[i]; // So that I can get a reference
-            result = ops(chunk_ref);
-            if (result)
-                return result;
-        }
-        return result;
-    }
+    // Return range
+    private ChunksHeaderRange range() return => ChunksHeaderRange(this);
+
+    // Return range
+    ChunksHeaderRange opIndex() return => range();
+
+    /* int opApply(T)(T ops) if (is(T : int delegate(ref ChunkRef))) */
+    /* { */
+    /*     int result = 0; */
+    /*     for (int i = 0; i < this.count; i++) { */
+    /*         ChunkRef chunk_ref = this[i]; // So that I can get a reference */
+    /*         result = ops(chunk_ref); */
+    /*         if (result) */
+    /*             return result; */
+    /*     } */
+    /*     return result; */
+    /* } */
 }
 
 // test shit
