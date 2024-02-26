@@ -1,5 +1,4 @@
 .dub
-dub.selections.json
 docs.json
 __dummy.html
 docs/
@@ -18,6 +17,7 @@ vox_engine-test-*
 *.lst
 *.dll
 
+**/dub.selections.json
 **/*-test-library
 **/*-test-unittest
 

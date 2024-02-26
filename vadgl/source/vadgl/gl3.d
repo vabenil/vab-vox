@@ -18,35 +18,11 @@ version `VADGL_DisableChecks`:
 - Do not overcomplicate anything
 - Think about OpenGL support fucking later
 +/
-
-/*
-   // There is the phobos bug: https://issues.dlang.org/show_bug.cgi?id=23818
-   // this can be reproduced by placing the imports in the following order.
-   // Yes, this sucks, and the bug is honestly stupid
-
-   
-module vadgl.gl3;
-
-import std.bitmanip             : bitfields;
-import std.conv                 : to;
-import std.format               : format;
-import std.meta                 : AliasSeq;
-
-import std.string               : toStringz;
-
-import std.algorithm            : endsWith, among;
-// OpenGL bindings
-import bindbc.opengl;
-
-import vadgl.types;
-import vadgl.error;
-import result;
-*/
 module vadgl.gl3;
 
 import std.conv                 : to;
 import std.format               : format;
-import std.meta                 : AliasSeq;
+import std.meta                 : AliasSeq, allSatisfy;
 
 // OpenGL bindings
 import bindbc.opengl;
@@ -60,7 +36,10 @@ import std.algorithm            : endsWith, among;
 import result;
 
 
-version (VADGL_EnableChecks) {
+version (VADGL_DisableChecks) {
+    enum bool checkGLCalls = false;
+}
+else version (VADGL_EnableChecks) {
     enum bool checkGLCalls = true;
 }
 else debug {
@@ -72,17 +51,20 @@ else {
 
 enum MAX_GL_VARIABLE_NAME = 256;
 
-auto trust(alias fnc, Args...)(Args args) @trusted => fnc(args);
+// NOTE: Currently used
+private auto trust(alias fnc, Args...)(Args args) @trusted => fnc(args);
 
-bool is_integral(GLType type) pure => (type >= GLType.BYTE && type <= GLType.UINT);
-bool is_floating(GLType type) pure => (GLType.FLOAT || GLType.HALF_FLOAT|| GLType.DOUBLE);
-bool is_base_type(GLType type) pure => (is_integral(type) || is_floating(type));
+private {
+    bool is_integral(GLType type) pure => (type >= GLType.BYTE && type <= GLType.UINT);
+    bool is_floating(GLType type) pure => (GLType.FLOAT || GLType.HALF_FLOAT|| GLType.DOUBLE);
+    bool is_base_type(GLType type) pure => (is_integral(type) || is_floating(type));
 
-bool is_vector(GLType type) pure => type.to!string[0..$-1].endsWith("VEC");
+    bool is_vector(GLType type) pure => type.to!string[0..$-1].endsWith("VEC");
+}
 
-GLType to_gl_type(GLenum type) => cast(GLType)type;
+GLType to_gltype(GLenum type) => cast(GLType)type;
 
-template toDType(GLType type) // make this work with vector and matrix types
+private template toDType(GLType type) // make this work with vector and matrix types
 {
     mixin("alias toDType = %s;".format(type.to!string().toLower()));
 }
@@ -109,7 +91,7 @@ private template isGLSLBaseType(T)
 
 private template isGLVector(T)
 {
-    static if (is(T == V[N], V, ulong N)) {
+    static if (is(T == V[N], V, size_t N)) {
         static if (N <= 4)
             enum bool isGLVector = true;
         else
@@ -122,7 +104,7 @@ private template isGLVector(T)
 // Doesn't work with struct types
 private template TypeInfoGLSL(T)
 {
-    static if (is(T == Bm[Nm][Mm], Bm, ulong Nm, ulong Mm)) { // is matrix
+    static if (is(T == Bm[Nm][Mm], Bm, size_t Nm, size_t Mm)) { // is matrix
         // TODO: If size Nm or Mm is <=4 it's invalid
         static if (isGLSLBaseType!Bm) {
             alias TypeInfoGLSL = AliasSeq!("matrix", Bm, Nm, Mm);
@@ -131,7 +113,7 @@ private template TypeInfoGLSL(T)
             alias TypeInfoGLSL = AliasSeq!("invalid", void, 0, 0);
         }
     }
-    else static if (is(T == Bv[Nv], Bv, ulong Nv)) { // is vector
+    else static if (is(T == Bv[Nv], Bv, size_t Nv)) { // is vector
         static if (isGLSLBaseType!Bv) {
             static if (Nv > 4)
                 alias TypeInfoGLSL = AliasSeq!("array", Bv, Nv, 1);
@@ -153,7 +135,7 @@ private template TypeInfoGLSL(T)
 }
 
 // TODO: make this work with matrix types
-template to_gl_type(T)
+template to_gltype(T)
 {
     import std.string   : toUpper;
 
@@ -164,19 +146,25 @@ template to_gl_type(T)
     static assert(kind != "invalid");
 
     alias BT = TInfo[1];
-    enum ulong N = TInfo[2];
-    enum ulong M = TInfo[3];
+    enum size_t N = TInfo[2];
+    enum size_t M = TInfo[3];
 
     static if (kind == "vector" && N <= 4) {
         static immutable string type_name = BT.stringof.toUpper;
         enum string dims = N.to!string;
         enum string prefix = (type_name[0] == 'F') ? "" : type_name[0..1];
-        mixin("enum GLType to_gl_type = GLType."~prefix~"VEC"~dims~";");
+        mixin("enum GLType to_gltype = GLType."~prefix~"VEC"~dims~";");
     }
     else // base type
-        mixin("enum GLType to_gl_type = GLType.%s;".format(T.stringof.toUpper()));
+        mixin("enum GLType to_gltype = GLType.%s;".format(T.stringof.toUpper()));
 }
 
+/++
+    Returns whether `param` is a parameter that can be passed to `glGetShaderIv`
+
+    Params:
+        param = A GLParam or GLenum represting an parameter for a Shader or Program
+ +/
 @safe nothrow pure
 bool is_shader_param(GLParam param)
 {
@@ -187,6 +175,12 @@ bool is_shader_param(GLParam param)
     );
 }
 
+/++
+    Returns whether `param` is a parameter that can be passed to `glGetProgramiv`
+
+    Params:
+        param = A parameter for a Shader or Program
+ +/
 @safe nothrow pure
 bool is_program_param(GLParam param)
 {
@@ -197,12 +191,14 @@ bool is_program_param(GLParam param)
     );
 }
 
+/// Clear all opengl error
 @trusted @nogc nothrow
 private static void opengl_clear_errors()
 {
     while(glGetError() != GL_NO_ERROR) {}
 }
 
+/// Return opengl error
 @trusted nothrow
 private GLInternalError opengl_get_error()
 {
@@ -211,10 +207,12 @@ private GLInternalError opengl_get_error()
     return GLInternalError.NO_ERROR;
 }
 
-/+
-For debugging purposes. Use gl_wrap instead unless you you are sure your OpenGL
-function call cannot cause a GLError.
-+/
+/++
+    Run OpenGL function and log it on version `VADGL_DebugGLCalls`
+    Use `gl_wrap` instead for error handling.
+
+    Returns: The result of the opengl function call
+ +/
 template gl_call(alias fnc)
 {
     private import std.traits   : isSomeFunction, ReturnType;
@@ -241,18 +239,17 @@ template gl_call(alias fnc)
             }
             assumeWontThrow(writeln(fnc_name, "(", args_str, ")"));
         }
-        // Should work even with if `T` is void
+        // Should work even if `T` is void
         return fnc(args);
     }
 }
 
-/+
-    Run opengl command and return result of `glGetError()`.
+/++
+    Run opengl function `fnc_` and check for OpenGL errors
 
-    Returns:
-        glError if `fnc`'s return type is void or
-        Result!(
-+/
+    Returns: `Result!(GLInternalError, T)` where `T` is the return type of
+    `fnc_`
+ +/
 template gl_wrap(alias fnc_)
 {
     private import std.traits   : isSomeFunction, ReturnType;
@@ -290,16 +287,54 @@ template gl_wrap(alias fnc_)
     }
 }
 
-/*
-    - this affects compilation times for big enums(>50 members)
-    - Doesn't work if enum has duplicates
-*/
-@safe @nogc nothrow
-private string enum_to_str(T)(T f) if (is(T == enum))
+@safe @nogc nothrow pure
+private char[10] uint_to_char_buff(uint x)
+{
+    import std.conv:    toChars;
+    char[10] buff = 0;
+    auto char_range = x.toChars();
+    assert(char_range.length < buff.length);
+
+    int i = 0;
+    foreach (char c; char_range) {
+        buff[i++] = c;
+    }
+    return buff;
+}
+
+@safe @nogc nothrow pure
+private bool member_in_enum(T)(T value) if (is(T == enum))
 {
     import std.traits   : EnumMembers;
+    switch(value)
+    {
+        static foreach(member; EnumMembers!T) {
+            case member:
+                return true;
+        }
+        default:
+            return false;
+    }
+}
 
-    final switch(f)
+/++
+    Return string representation of enum member.
+    For example `enum_to_str(MyEnum.A)` return string `"A"`
+
+    NOTES:
+    $(LIST
+        * this affects compilation times for big enums(>50 members)
+        * Doesn't work if enum has duplicates
+        * Doesn't work if `value` is not a valid enum member
+     )
+ +/
+@safe @nogc nothrow pure
+private string enum_to_str(T)(T value) if (is(T == enum))
+{
+    import std.conv     : to;
+    import std.traits   : EnumMembers;
+
+    final switch(value)
     {
         static foreach(member; EnumMembers!T) {
             case member:
@@ -308,9 +343,34 @@ private string enum_to_str(T)(T f) if (is(T == enum))
     }
 }
 
+// None of `Shader.Type` members are more than 8 characters, but reserve 32 bytes
+// anyway. Better safe than sorry
+@safe @nogc nothrow pure
+private immutable(char)[32] to_char_buff(Shader.Type type)
+{
+    char[32] buff = 0;
+    if (type.member_in_enum()) {
+        string str = type.enum_to_str();
+        assert(str.length <= 32);  // Should never happen
+        buff[0..str.length] = str[];
+    }
+    else {
+        buff[0..10] = uint_to_char_buff(cast(uint)type);
+    }
+    return buff;
+}
+
+
+private enum isShader(T) = is(T == Shader);
+private alias isShaderSeq(Args...) = allSatisfy!(isShader, Args);
+
+/+++
+    Abstraction over shader
++++/
 struct Shader
 {
     import std.bitmanip             : bitfields;
+    // TODO: Move this to `types.d`
     enum Type {
         VERTEX           =  GL_VERTEX_SHADER,
         GEOMETRY         =  GL_GEOMETRY_SHADER,
@@ -344,21 +404,24 @@ struct Shader
 
     // This doesn't throw but can't be marked as nothrow bc of `format`
     // Wrapper to glCreateShader
+    /+++
+        Create OpenGL shader
+    +++/
     nothrow
     static GLResult!Shader create_shader(string name, Type type)
     {
-        auto res = gl_wrap!glCreateShader(type);
+        auto res = gl_create_shader(type);
         // error handling
         switch(res.error.error_flag)
         {
-            case GLInternalError.NO_ERROR:
+            case GLError.Flag.NO_ERROR:
                 if (res.value == 0) goto default;
                 break;
-            case GLInternalError.INVALID_ENUM:
+            case GLError.Flag.INVALID_ENUM:
                 return GLResult!Shader(
                     GLError(
                         GLError.Flag.INVALID_ENUM,
-                        "Type "~type.enum_to_str()~"is not a valid shader type"
+                        ": Type "~type.to_char_buff()~" is not a valid shader type"
                     )
                 );
             default:
@@ -369,6 +432,10 @@ struct Shader
     }
 
     //  TODO: Might want to add file and line as template params
+    /+++
+        Create OpenGL shader and call `gl_shader_source` to set source in
+        shader object
+    +++/
     nothrow
     static GLResult!Shader from_src(string name, Type type, string src)
     {
@@ -400,7 +467,7 @@ struct Shader
         return glresult(shader);
     }
 
-    /+
+    /++
         Intialize shader with values.
 
         If you have already successfully called `glCreateShader`,
@@ -410,7 +477,7 @@ struct Shader
         ```
 
         To actually create a shader use `Shader.create_shader`
-    +/
+     +/
     @safe @nogc nothrow
     this
     (string name, Type type, uint id, bool created=false,
@@ -425,9 +492,7 @@ struct Shader
     }
 
     /+
-        PERHAPS TODO (Althought it might not be necessary):
-        - Perhaps put this outside of Shader
-        - and overload it
+        Set shader source to `src`
     +/
     // Kind of Wrapper to glShaderSource
     @trusted nothrow
@@ -438,23 +503,20 @@ struct Shader
         if (!this.is_created)
             return glresult(GLError(GLError.Flag.INVALID_SHADER));
 
-        immutable(char*) src_ptr = src.ptr;
-        int len = cast(int)src.length;
-
-        if (auto res = gl_wrap!glShaderSource(this.id_, 1, &src_ptr, &len))
+        if (auto res = gl_shader_source(this.id, src))
             // This is way longer than I expected
-            return res.error.to_glerror().append_fnc().glresult();
+            return res.error.append_fnc().glresult();
 
         this.is_source_set_ = true;
         return GLError(GLError.Flag.NO_ERROR).glresult();
     }
 
     /* @safe */
-    /+
-        Wrapper to glCompileShader.
+    /+++
+        compile shader and check whether compilation is successful
 
-        This also calls get_param to validte compilation
-    +/
+        Returns: GLResult!void with error info if an OpenGL error occurred
+    +++/
     @trusted nothrow
     GLResult!void compile()
     {
@@ -466,8 +528,8 @@ struct Shader
 
         // Assume source is already set
         // should never happen
-        if (auto res = gl_wrap!glCompileShader(this.id))
-            return res.error.to_glerror().append_fnc().glresult();
+        if (auto res = gl_compile_shader(this.id))
+            return res.error.append_fnc().glresult();
 
         GLResult!bool compile_res = this.get_param!(GLParam.COMPILE_STATUS);
         if (compile_res)
@@ -487,7 +549,7 @@ struct Shader
         return GLError().glresult();
     }
 
-    // Wrap glShaderSource and glCompileShader
+    /// ditto
     @safe nothrow
     GLResult!void compile_src(in string src)
     {
@@ -500,7 +562,7 @@ struct Shader
         return GLError().glresult();
     }
 
-    // NOTE: this functions might be redundant, also it throws
+    /// Same as `Shader.compile` except this function can throw
     @safe
     GLResult!void compile_f(in string file_name)
     {
@@ -537,6 +599,7 @@ struct Program
         ));
     }
 
+    // getters
     @property @safe @nogc {
         bool is_created() const => this.is_created_;
         bool is_attached() const => this.is_attached_;
@@ -554,12 +617,16 @@ struct Program
         this.is_created_ = created;
     }
 
-    // Wrapper to glCreateProgram
+    /+++
+        Creates program
+        Returns: `GLResult!Program` returns valid program or 
+        `GLError.Flag.UNKNOWN_ERROR` if an error ocurred
+    +++/
     @trusted
     static GLResult!Program create_program(string program_name)
     {
         // Shouldn't be able to fail,
-        int prog_id = gl_call!glCreateProgram();
+        int prog_id = gl_create_program();
 
         if (prog_id == 0) { // something went wrong
             return GLResult!Program(GLError(GLError.Flag.UNKNOWN_ERROR));
@@ -569,26 +636,27 @@ struct Program
         return program.glresult();
     }
 
+    /+++
+        Use null program. same as `gl_program_use(0)`
+    +++/
     @safe
     static void use_empty() => cast(void)Program().use();
 
-    // Wrapper to glAttachShader
-    // TODO: maybe check GL_ATTACHED_SHADERS to check if number of shaders
-    // attached is what we expect
+    /// Attach 1 shader use [Program.attach] instead
     @trusted
-    GLResult!void attach(ref Shader s)
+    private GLResult!void attach_(Shader s)
     {
         if (!this.is_created) {
             return GLError(GLError.Flag.INVALID_PROGRAM).glresult();
         }
 
         // program.id should be a valid OpenGL program at this point
-        switch(gl_wrap!glAttachShader(this.id_, s.id_).error.error_flag) {
-            case GLInternalError.NO_ERROR:
+        switch(gl_attach_shader(this.id, s.id).error.error_flag) {
+            case GLError.Flag.NO_ERROR:
                 this.is_attached_ = true;
                 return glresult(GLError.NO_ERROR);
 
-            case GLInternalError.INVALID_OPERATION:
+            case GLError.Flag.INVALID_OPERATION:
             {
                 if (!s.is_created) {
                     return glresult(GLError("glAttachShader", GLError.Flag.INVALID_SHADER));
@@ -605,8 +673,60 @@ struct Program
         }
     }
 
-    // Wrapper to glLinkProgram
-    // TODO: finsih fixing glresult here
+    // Wrapper to glAttachShader
+    // TODO: maybe check GL_ATTACHED_SHADERS to check if number of shaders
+    // attached is what we expect
+    /++
+        attach shaders to Program
+        Params:
+            shaders = `AliasSeq` of shaders
+
+        Returns: `GLResult!void` with `GLError`:
+        $(LIST
+            * `GLError.Flag.NO_ERROR`:
+                If attached correctly and there are no errors
+            * `GLError.Flag.INVALID_PROGRAM`:
+                if program hasn't been initialized properly
+            * `GLError.Flag.INVALID_SHADER`:
+                if shader hasn't been initialized
+                if shader hasn't been compiled succesfully
+            * `GLError.Flag.SHADER_ALREADY_ATTACHED`:
+                if Shader `s` has already been attached to program
+        )
+
+        Example:
+        ---
+        // Initialize program and shaders
+        Program program = ...
+        Shader vertex_shader = ...
+        Shader frag_shader = ...
+
+        // Call [gl_attach_shader] per shader and throw on error
+        program.attach(vertex_shader, frag_shader).throw_on_error;
+        ---
+     +/
+    @trusted
+    GLResult!void attach(Args...)(Args shaders) if (Args.length > 0 && isShaderSeq!Args)
+    {
+        foreach (shader; shaders) {
+            if (auto res = this.attach_(shader)) return res;
+        }
+        return GLError.NO_ERROR.glresult();
+    }
+
+    // TODO: Maybe check extra cases
+    /++
+        Link shaders attached to program
+        Returns: `GLResult!void` with `GLError`:
+        $(LIST
+            * `GLError.Flag.NO_ERROR`:
+                if no opengl errors occurred
+            * `GLError.Flag.INVALID_PROGRAM`:
+                if program is valid
+            * `GLError.Flag.UNKNOWN_ERROR`:
+                if something unexpected went wrong
+         )
+     +/
     @trusted
     GLResult!void link()
     {
@@ -614,11 +734,11 @@ struct Program
             return glresult(GLError.INVALID_PROGRAM);
         }
 
-        auto res = gl_wrap!glLinkProgram(this.id_);
+        auto res = gl_link_program(this.id);
         switch(res.error.error_flag)
         {
-            case GLInternalError.NO_ERROR: break;
-            case GLInternalError.INVALID_OPERATION:
+            case GLError.Flag.NO_ERROR: break;
+            case GLError.Flag.INVALID_OPERATION:
                 // TODO: Do something else here probably
                 return glresult(GLError.UNKNOWN_ERROR); 
             default:
@@ -641,8 +761,13 @@ struct Program
 
     // Wrapper to glValidateProgram
     // TODO:
-    //  - ~~Hmm, maybe I shouldn't throw in here and return bool instead~~ I think I fixed this
-    //  - take care of potential geometry shader shenanigans later
+    //  - [Add error hint] take care of potential geometry shader shenanigans later
+    /+++
+        validate program and call `get_param` to check if validation was
+        successful
+
+        Returns: `GLResult!void` with GLError with error information if any
+    +++/
     @trusted
     GLResult!void validate()
     {
@@ -650,6 +775,7 @@ struct Program
             return glresult(GLError(GLError.Flag.INVALID_PROGRAM));
 
         int validated = 0;
+        // TODO: Make gl_validate_program function
         // Shouldn't raise any errors
         gl_call!glValidateProgram(this.id);
 
@@ -668,24 +794,58 @@ struct Program
         return glresult(GLError.NO_ERROR);
     }
 
-    // Wrapper to glUseProgram
+    /++
+        use `this` Program. Use `Program.use_empty()` to use null program
+
+        Returns: `GLResult!void` with GLError with error information if any
+     +/
     @trusted
     GLResult!void use() inout
     {
         // NOTE: in theory if this.id_ is 0 it shouldn't be an error in OpenGL
-        // but it really makes no sense to use an invalid program.
+        // but in really makes no sense to use an invalid program.
         // Make a `Program.stop_using()` or `Program.use_empty()`
-        return gl_wrap!glUseProgram(this.id_).to_glresult();
+        return gl_use_program(this.id_);
     }
 
     // Cool convinience function
     // Might be cool to use a variadic template here with `ref Shader`
     // this solutions is ok thought
+    /++
+        Compile all `shaders`, attach each to program
+        link and validate program.
+
+        $(WARNING
+            This function may do to much, it may get deleted or
+            renamed. Use the equivalent descripted in [#examples]:
+         )
+
+        Returns: `GLResult!void` with error information if any
+        Example:
+        ---
+        program.prepare_and_attach(&vert_shader, &frag_shader).throw_on_error;
+        // Program read to use!
+        ---
+        is equivalent to:
+        ---
+        Program program;
+        Shader vert_sh, frag_shader; // our shaders;
+        foreach (shader; [&vert_sh, &frag_shader])
+            shader.compile().throw_on_error;
+
+        program.attach(vert_sh, frag_shader).throw_on_error;
+        program.link().throw_on_error;
+        program.validate().throw_on_error;
+        // Program ready to use!
+        ---
+     +/
     @safe
     GLResult!void prepare_and_attach(Shader*[] shaders ...)
     {
         foreach (Shader *shader; shaders) {
-            if (auto res = shader.compile()) return res.error.append_fnc().glresult();
+            if (!shader.is_compiled) {
+                if (auto res = shader.compile()) return res.error.append_fnc().glresult();
+            }
 
             if (auto res = this.attach(*shader)) return res.error.append_fnc().glresult();
         }
@@ -699,18 +859,22 @@ struct Program
 
     // Wrapper to glUniformLocation
     // If loc is negative then uniform `u_name` is not an active uniform
+    /+++
+        Wrapper to `gl_get_uniform_location`
+
+        Returns: `GLResult!int` with location to uniform and error information
+        if any
+    +++/
     @trusted
-    int get_uniform_loc(string u_name) inout
-    /* out(result; result > 0) */
+    GLResult!int get_uniform_loc(string u_name) inout /* out(result; result > 0) */
     {
         import std.string   : toStringz;
-        // TODO: add checks and stuff
-        int loc = trust!glGetUniformLocation(this.id, u_name.toStringz);
+        GLResult!int loc_result = gl_get_uniform_location(this.id, u_name);
         /* if (loc < 0) { */
         /*     // TODO: use `std.logger` and put this in a version block */
         /*     stderr.writeln("[GL_WARNING]: "~u_name~" is not an active uniform name"); */
         /* } */
-        return loc;
+        return loc_result;
     }
 }
 
@@ -760,7 +924,8 @@ GLError get_param
     return err;
 }
 
-alias ParamReturnTypes = AliasSeq!(
+// TODO: This can be simiplified with a compile time associative array
+private alias ParamReturnTypes = AliasSeq!(
     Shader.Type, // SHADER_TYPE
     bool, // DELETE_STATUS
     bool, // COMPILE_STATUS
@@ -875,10 +1040,11 @@ struct VBufferObject
     // This could only fail if target is invalid. But that's ok
     static void disable(GLenum target) @safe => cast(void)VBufferObject().bind(target);
 
+    // Allocates and copys `data` to a gpu buffer
     @trusted
-    static GLResult!void set_data(GLenum target, ulong size, const(void*) data, GLenum usage)
+    static GLResult!void set_data(GLenum target, size_t size, const(void*) data, GLenum usage)
     {
-        return gl_wrap!glBufferData(target, size, data, usage).to_glresult();
+        return gl_buffer_data(target, size, data, usage);
     }
 
     @property uint id() @safe const => this.id_;
@@ -902,17 +1068,35 @@ struct VBufferObject
     /*
        The OpenGL target often has no effect really so it doesn't matter which you use
     */
-    GLResult!void set_data(ulong size, const(void*) data = null, GLenum usage = GL_STATIC_DRAW)
+    GLResult!void set_data(size_t size, const(void*) data = null, GLenum usage = GL_STATIC_DRAW)
     {
         // TODO: Hmmmmmmm, not sure about this one
         /* if (auto res = this.bind(GL_ARRAY_BUFFER)) */
         /*     return res; */
 
-        auto res = VBufferObject.set_data(GL_ARRAY_BUFFER, size, data, usage);
+        /*
+            NOTE: I'm using `GL_ARRAY_BUFFER` instead of the buffer type because
+            for copying data, because it doesn't make sense to use something else
+            anyway. Though I guess this would require me to also bind which may
+            cause a problem. But binding just makes the most sense here
+        */
+        auto res = VBufferObject.set_data(this.target, size, data, usage);
 
         /* VBufferObject.disable(GL_ARRAY_BUFFER); */
 
         return res;
+    }
+    // Copy `data` into buffer + offset
+    @trusted
+    GLResult!void set_sub_data(size_t offset, size_t size, const(void*) data)
+    {
+        return gl_buffer_sub_data(this.target, offset, size, data);
+    }
+
+    @trusted
+    GLResult!void set_sub_data(size_t offset, void[] data)
+    {
+        return this.set_sub_data(offset, data.length, data.ptr);
     }
 
     // Should be safe
@@ -932,11 +1116,11 @@ struct GLAttributeInfo
     int loc;
     GLType type;
     int count;
-    ulong offset_;
+    size_t offset_;
     bool normalized = false;
 
     static GLResult!GLAttributeInfo from_name
-    (int program_id, string name, GLType type, int count, ulong offset_, bool normalized=false)
+    (int program_id, string name, GLType type, int count, size_t offset_, bool normalized=false)
     {
         GLAttributeInfo attr = GLAttributeInfo(-1, type, count, offset_, normalized);
         if (auto res = attr.set_location(name, program_id))
@@ -964,20 +1148,23 @@ struct GLAttributeInfo
             => gl_vertex_attrib_divisor(this.loc, divisor);
 
     // Remember about glVertexAttribFormat
-    GLResult!void set(ulong stride)
+    GLResult!void set(size_t stride)
         => gl_vertex_attribute_conf(loc, count, type, stride, offset_, normalized);
 
-    GLResult!void setI(ulong stride)
+    GLResult!void setI(size_t stride)
         => gl_vertex_attributeI_conf(loc, count, type, stride, offset_);
 }
 
+/++
+    Abstraction over uniforms
+ +/
 struct GLUniform
 {
     int loc; // TODO: perhaps remove `loc`
 
-    static GLResult!GLUniform from_name(string name, int program_id)
+    static GLResult!GLUniform from_name(string name, uint program_id)
     {
-        auto res = gl_get_uniform_location(name, program_id);
+        auto res = gl_get_uniform_location(program_id, name);
         if (res)
             return GLResult!GLUniform(res.error); 
         return GLResult!GLUniform(GLUniform(res.value));
@@ -985,7 +1172,7 @@ struct GLUniform
 
     GLResult!void set_location(string name, int program_id)
     {
-        auto res = gl_get_uniform_location(name, program_id);
+        auto res = gl_get_uniform_location(program_id, name);
         if (res)
             return res.error.glresult();
         return GLResult!void();
@@ -999,11 +1186,11 @@ struct GLUniform
     }
 
     GLResult!void set_mat4(int n, const(float)[] mat, bool normalized=false)
-        => gl_set_uniform_mat4(this.loc, n, mat, normalized);
+        => set_uniform_mat4(this.loc, n, mat, normalized);
 
     // Will copy as much as possible of mat
     GLResult!void set_mat4(const(float)[] mat, bool normalized=false)
-        => gl_set_uniform_mat4(this.loc, mat, normalized);
+        => set_uniform_mat4(this.loc, mat, normalized);
 
     GLResult!void set_v(int N, T)(T[N] vec, int n = 1)
     if (T.stringof.among("float", "int", "uint") && N <= 4)
@@ -1014,16 +1201,18 @@ struct GLUniform
         => gl_set_uniform!N(this.loc, n, vec);
 }
 
-GLResult!void gl_set_uniform_mat4(int loc, const(float[]) mat, bool normalized=false)
+GLResult!void gl_uniform_matrix4fv(int loc, int n, bool normlized, const(float*) mat_ptr)
+    => gl_wrap!glUniformMatrix4fv(loc, n, normlized, mat_ptr).to_glresult();
+
+GLResult!void set_uniform_mat4(int loc, int n, const(float[]) mat, bool normalized=false)
+in(mat.length >= 16 * n)
+    => gl_uniform_matrix4fv(loc, n, normalized, mat.ptr);
+
+GLResult!void set_uniform_mat4(int loc, const(float[]) mat, bool normalized=false)
 {
     const int n = cast(int)(mat.length / 16);
-    return gl_set_uniform_mat4(loc, n, mat, normalized);
+    return set_uniform_mat4(loc, n, mat, normalized);
 }
-
-GLResult!void gl_set_uniform_mat4(int loc, int n, const(float[]) mat, bool normalized=false)
-in(mat.length >= 16 * n)
-    => gl_wrap!glUniformMatrix4fv(loc, n, normalized, mat.ptr).to_glresult();
-
 
 private template shortBaseTypeNames(T)
 {
@@ -1065,13 +1254,13 @@ in(v.length >= n * N)
 GLResult!void  gl_set_uniform(int N, T)(int loc, T[N][] v)
 if (T.stringof.among("float", "int", "uint") && N <= 4)
 {
-    enum string shortT = shortBaseTypeNames!(T.stringof);
+    enum string shortT = shortBaseTypeNames!(T);
 
     return gl_wrap!(mixin("glUniform"~N.to!string~shortT~"v"))(loc, v.length, v.ptr)
             .to_glresult();
 }
 
-/* void gl_set_uniform(T, ulong N)(in T[N] vec) */
+/* void gl_set_uniform(T, size_t N)(in T[N] vec) */
 /* { */
 /*     T[N] vec_cp = vec[]; // Copy V since it's immutable */
 /*     mixin("glUniform"~N.to~string~TC~"v(loc, 1, vec_cp.ptr);"); */
@@ -1098,7 +1287,7 @@ private enum __vadgl_idea = q{
     // The relevant methods and maybe attributes
     template VertexFormat(VertexType)
     {
-        enum ulong AttribCount = getAttribCount!VertexType;
+        enum size_t AttribCount = getAttribCount!VertexType;
 
         GLAttribInfo[AttribCount] attributes;
         AttributeType.tupleof[] values;
@@ -1126,15 +1315,85 @@ template glattribute(T)
     static assert(kind != "invalid");
 
     alias BT = TInfo[1];
-    enum ulong N = TInfo[2];
-    enum ulong M = TInfo[3];
+    enum size_t N = TInfo[2];
+    enum size_t M = TInfo[3];
 
-    static immutable GLType type = to_gl_type!BT;
+    static immutable GLType type = to_gltype!BT;
 
     @safe @nogc nothrow pure
-    GLAttributeInfo glattribute(uint loc, ulong offset_, bool normalized=false)
+    GLAttributeInfo glattribute(uint loc, size_t offset_, bool normalized=false)
         => GLAttributeInfo(loc, type, N * M, offset_, normalized);
 }
+
+nothrow
+GLResult!void gl_buffer_data(GLenum target, GLsizeiptr size, const(void*) data, GLenum usage)
+    => gl_wrap!glBufferData(target, size, data, usage).to_glresult();
+
+nothrow
+GLResult!void gl_buffer_sub_data(GLenum target, GLintptr offset, GLsizeiptr size, const(void*) data)
+    => gl_wrap!glBufferSubData(target, offset, size, data).to_glresult();
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+GLResult!uint gl_create_shader(Shader.Type type)
+        => gl_wrap!glCreateShader(type).to_glresult();
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+GLResult!void gl_shader_source(uint id, int count, const(char**) strings, const(int*) lengths)
+    => gl_wrap!glShaderSource(id, count, strings, lengths).to_glresult();
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+GLResult!void gl_shader_source(uint id, const(char*) src_c_str, int length)
+    => gl_shader_source(id, 1, &src_c_str, &length);
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow GLResult!void gl_shader_source(uint id, const(char[]) src)
+    => gl_shader_source(id, src.ptr, cast(int)src.length);
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+GLResult!void gl_compile_shader(uint id)
+    => gl_wrap!glCompileShader(id).to_glresult();
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+uint gl_create_program()
+    => gl_call!glCreateProgram(); // doesn't generate GLError
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+GLResult!void gl_use_program(uint program_id)
+    => gl_wrap!glUseProgram(program_id).to_glresult();
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+GLResult!void gl_attach_shader(uint program_id, uint shader_id)
+    => gl_wrap!glAttachShader(program_id, shader_id).to_glresult();
+
+/++
+    Wrapper to `glCreateShader`
+ +/
+nothrow
+GLResult!void gl_link_program(uint program_id)
+    => gl_wrap!glLinkProgram(program_id).to_glresult();
 
 /*
     NOTE:
@@ -1144,21 +1403,21 @@ template glattribute(T)
 // TODO: change error type
 nothrow
 GLResult!void gl_vertex_attribute_conf
-(uint loc, int count, GLType type, ulong stride, ulong offset_, bool normalized = false)
+(uint loc, int count, GLType type, size_t stride, size_t offset_, bool normalized = false)
     => gl_wrap!glVertexAttribPointer(
             loc, count, type,
             normalized, cast(GLsizei)stride, cast(void*)offset_).to_glresult();
 
 nothrow
 GLResult!void gl_vertex_attributeI_conf
-(uint loc, int count, GLType type, long stride, ulong offset_)
+(uint loc, int count, GLType type, long stride, size_t offset_)
     => gl_wrap!glVertexAttribIPointer(
             loc, count, type,
             cast(GLsizei)stride, cast(void*)offset_).to_glresult();
 
 // Maps to `glEnableVertexAttribArray` or `glEnableVertexArrayAttrib`
 /*
-NOTE:
+NOTE (Out of date):
     This function calls `glBindVertexArray` when running on versions < gl45
     Can generate errors:
         - `GL_INVALID_OPERATION`:
@@ -1211,51 +1470,89 @@ nothrow
 static GLResult!int gl_get_attribute_location(string name, int program_id)
     => gl_wrap!glGetAttribLocation(program_id, name.toStringz).to_glresult();
 
+/++
+    Wrapper to `glGetUniformLocation`
+ +/
 nothrow
-static GLResult!int gl_get_uniform_location(string name, int program_id)
-    => gl_wrap!glGetUniformLocation(program_id, name.toStringz).to_glresult();
+static GLResult!int gl_get_uniform_location(uint program_id, const(char*) name)
+    => gl_wrap!glGetUniformLocation(program_id, name).to_glresult();
+
+/*
+    NOTE: The only way I could make this @nogc is by adding an arbitrary maximum
+    length, allocating a buffer of that size and reserving the last space for
+    '\0'.
+ */
+/++
+    Wrapper to `glGetUniformLocation`
+
+    $(WARNING
+        This function calls `toStringz` which mayh allocate. Use the
+        `const(char*)` overload of this function to avoid allocations
+    )
+ +/
+nothrow
+static GLResult!int gl_get_uniform_location(uint program_id, string name)
+    => gl_get_uniform_location(program_id, name.toStringz);
 
 // TODO: Replace GLEnum with my own `GLPrimitive` type
-/*
-NOTE:
-because I'm using ulong instead of an integer GL_INVALID_VALUE cannot happen
-here, but there might be an error if count is >= 2^63
-*/
+/++
+    Wrapper to `glDrawArrays`
+ +/
 nothrow
 static GLResult!void gl_draw_arrays(GLenum mode, uint first, int count)
     => gl_wrap!glDrawArrays(mode, first, count).to_glresult();
 
+/++
+    Wrapper to `glDrawElements`
+ +/
 nothrow
-static GLResult!void gl_draw_elements(GLenum mode, int count, GLType type, ulong indices)
+static GLResult!void gl_draw_elements(GLenum mode, int count, GLType type, size_t indices)
     => gl_wrap!glDrawElements(mode, count, type, cast(void*)indices).to_glresult();
 
+/++
+    Wrapper to `glDrawRangeElements`
+ +/
 nothrow
 GLResult!void gl_draw_range_elements
-(GLenum mode, uint start, uint end, int count, GLType type, ulong offset_)
+(GLenum mode, uint start, uint end, int count, GLType type, size_t offset_)
     => gl_wrap!glDrawRangeElements(mode, start, end, count, type, cast(void*)offset_).to_glresult();
 
-// Only works with OpenGL version >= 3.1
+/++
+    Wrapper to `glDrawArraysInstanced`
+
+    $(NOTE Requires OpenGL version >= 3.1)
+ +/
 nothrow
 GLResult!void gl_draw_arrays_instanced(GLenum mode, int first, int count, int prim_count)
     => gl_wrap!glDrawArraysInstanced(mode, first, count, prim_count).to_glresult();
 
-// Only works with OpenGL version >= 3.1
+/++
+    Wrapper to `glDrawElementsInstanced`
+ +/
 nothrow
 GLResult!void gl_draw_elements_instanced
 (GLenum mode, int count, GLType type, void* indicies_ptr, int prim_count)
     => gl_wrap!glDrawElementsInstanced(mode, count, type, indicies_ptr, prim_count)
             .to_glresult();
 
+/++
+    Wrapper to `glClearColor`
+ +/
 @trusted nothrow
 void gl_clear_color(float r=0.0, float g=0.0, float b=0.0, float a=1.0)
     => gl_call!glClearColor(r, g, b, a);
 
+
+/++
+    Wrapper to `glClear`
+ +/
 @trusted nothrow
 GLResult!void gl_clear(GLbitfield mask)
     => gl_wrap!glClear(mask).to_glresult();
 
 // TODO: Handle errors by returning GLResult
 // TODO: Could use `Args...` instead of T to bind mutiple stuff at the same time
+/// Not sure about this, may get removed later
 void gl_with(alias fnc, T)(T globject)
 {
     import std.meta : anySatisfy;
@@ -1271,6 +1568,16 @@ void gl_with(alias fnc, T)(T globject)
     else static if (is(T == Program)) Program.use_empty();
 }
 
+/*
+    TODO: This is not @nogc because of `fromStringz` and `idup` anway, there's
+    no @nogc way to return a string here. Provide an override for whomever
+    might want a @nogc version
+*/
+/++
+    Call `glGet{Program|Shader}InfoLog` and return result as a string
+
+    $(WARNING This function allocates)
+ +/
 @trusted
 GLResult!string get_info_log(T)(ref const(T) self)
 if (is(T == Shader) || is(T == Program))
@@ -1303,12 +1610,12 @@ if (is(T == Shader) || is(T == Program))
 
     if (log_size) {
         // TODO: all this could be done in a single buffer.
-        char[2048] log_buff = void; log_buff[] = '\0';
+        char[2048] log_buff = '\0';
 
-        ulong head_len = log_buff[].sformat("Error on \"%s\" shader\n", self.name).length;
+        size_t head_len = log_buff[].sformat("Error on \"%s\" shader\n", self.name).length;
         string tail = "\n[LOG SIZE LIMIT REACHED]\0";
         // size to copy from `erro_log`
-        ulong log_cp_size =
+        size_t log_cp_size =
             (log_size + head_len > 2047)
                 ? 2047 - head_len : log_size;
 

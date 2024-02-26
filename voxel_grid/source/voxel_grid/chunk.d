@@ -28,18 +28,34 @@ enum bool isChunk(T) =
 static ulong to_index_(uint x, uint y, uint z, ubyte magnitude)
     => x + (y << magnitude) + (z << (magnitude << 1));
 
+// TODO: Honestly just use a class
 struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
 {
-    @safe @nogc nothrow:
-
-    static assert(chunk_magnitude > 0 && chunk_magnitude <= 6);
+    @safe nothrow:
+    static assert(chunk_magnitude > 0 && chunk_magnitude <= 10);
 
     alias VoxelType = VoxelT;
+    alias This = VoxelChunk!(VoxelType, chunk_magnitude);
+
     enum uint size = 1 << chunk_magnitude;
     enum uint magnitude = chunk_magnitude;
     enum uint voxel_count = 1 << (magnitude * 3);
 
-    VoxelType[1 << (magnitude * 3)] data;
+    static if (chunk_magnitude <= 5)
+        VoxelType[voxel_count] data;
+    else
+        VoxelType[] data;
+
+    // IMPORTANT: ALWAYS use Chunk() for initializing a chunk
+    // Work around for default constructor
+    static This opCall()
+    {
+        This self = This.init; // init an empty chunk
+        static if (chunk_magnitude > 5)
+            self.data = new VoxelType[](voxel_count);
+
+        return self;
+    }
 
     bool in_bounds(int x, int y, int z) const pure
         => (x >= 0 && y >= 0 && z >= 0 &&
@@ -62,15 +78,22 @@ struct VoxelChunk(VoxelT, uint chunk_magnitude=4) if (isVoxel!VoxelT)
         data[to_index(cx, cy, cz)] = voxel;
     }
 
-    ref inout(VoxelType) opIndex(uint x, uint y, uint z) inout return
+    VoxelType opIndex(uint x, uint y, uint z) const
     in (this.in_bounds(x, y, z))
     {
         return data[to_index(x, y, z)];
     }
 
-    ref inout(VoxelType) opIndex(int[3] p) inout return => this[p[0], p[1], p[2]];
+    VoxelType opIndexAssign(VoxelType vox, uint x, uint y, uint z)
+    in (this.in_bounds(x, y, z))
+    {
+        return (data[to_index(x, y, z)] = vox);
+    }
+    VoxelType opIndex(int[3] p) const => this[p[0], p[1], p[2]];
+    VoxelType opIndex(uint index) const => data[index];
 
-    ref inout(VoxelType) opIndex(uint index) inout return => data[index];
+    VoxelType opIndexAssign(VoxelType vox, int[3] p) => (this[p[0], p[1], p[2]] = vox);
+    VoxelType opIndexAssign(VoxelType vox, uint index) => (data[index] = vox);
 }
 
 alias Chunk = VoxelChunk!Voxel;
@@ -79,7 +102,7 @@ unittest
 {
     import std.stdio;
 
-    Chunk chunk;
+    Chunk chunk = Chunk();
 
     chunk.set_voxel(3, 0, 0, Voxel(true));
     chunk.set_voxel(0, 3, 0, Voxel(true));

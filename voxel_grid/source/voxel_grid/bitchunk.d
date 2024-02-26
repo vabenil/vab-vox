@@ -27,9 +27,12 @@ in(index < (data.length << 3))
 struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
 {
     alias VoxelType = VoxelT;
+    alias This = VoxelBitChunk!(VoxelType, chunk_magnitude);
+
     enum ulong DIM = 1L << chunk_magnitude;
     enum ulong magnitude = chunk_magnitude;
     enum ulong voxel_count = 1L << (magnitude * 3);
+    enum ulong byte_count = voxel_count >> 3;
 
     /*
        So Here I got 2 choices.
@@ -39,8 +42,21 @@ struct VoxelBitChunk(VoxelT, uint chunk_magnitude=4)
        2) I can have a ubyte represent 2x2x2 voxels
             - I guess this might allow me to copy volume of voxels
     */
-    ubyte[voxel_count >> 3] data;
-    /* ubyte[] data; */
+    static if (chunk_magnitude <= 6)
+        ubyte[byte_count] data;
+    else
+        ubyte[] data;
+
+    // IMPORTANT: ALWAYS use Chunk() for initializing a chunk
+    // Work around for default constructor
+    static This opCall()
+    {
+        This self = This.init; // init an empty chunk
+        static if (chunk_magnitude > 6)
+            self.data = new ubyte[](voxel_count);
+
+        return self;
+    }
 
     bool in_bounds(int x, int y, int z) const pure
         => (x >= 0 && y >= 0 && z >= 0 &&
@@ -102,7 +118,7 @@ unittest
     enum ulong DIM = 1 << MAG;
     alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
 
-    BitChunk chunk;
+    BitChunk chunk = BitChunk();
 
     chunk.set_voxel(3, 0, 0, BitVoxel(true));
     chunk.set_voxel(0, 3, 0, BitVoxel(true));

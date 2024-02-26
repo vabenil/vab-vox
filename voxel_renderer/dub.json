@@ -2,7 +2,7 @@
     "name": "voxel_renderer",
     "targetType": "library",
     "#versions": ["VADGL_DebugGLCalls"],
-    "versions": ["GL_42"],
+    "versions": ["GL_46"],
 
     "configurations": [
         {
@@ -16,8 +16,8 @@
     "dependencies": {
         "bindbc-opengl": "~>1.1.0",
 
-        "vox_engine:common": "*",
-        "vox_engine:voxel_grid": "*",
-        "vox_engine:vadgl": "*"
+        "vox_engine:common": { "path": "./common" },
+        "vox_engine:voxel_grid": { "path": "./voxel_grid" },
+        "vox_engine:vadgl": { "path": "./vadgl" }
     }
 }
