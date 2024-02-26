@@ -1080,7 +1080,7 @@ struct VBufferObject
             anyway. Though I guess this would require me to also bind which may
             cause a problem. But binding just makes the most sense here
         */
-        auto res = VBufferObject.set_data(GL_ARRAY_BUFFER, size, data, usage);
+        auto res = VBufferObject.set_data(this.target, size, data, usage);
 
         /* VBufferObject.disable(GL_ARRAY_BUFFER); */
 
@@ -1090,9 +1090,14 @@ struct VBufferObject
     @trusted
     GLResult!void set_sub_data(size_t offset, size_t size, const(void*) data)
     {
-        return gl_buffer_sub_data(GL_ARRAY_BUFFER, offset, size, data);
+        return gl_buffer_sub_data(this.target, offset, size, data);
     }
 
+    @trusted
+    GLResult!void set_sub_data(size_t offset, void[] data)
+    {
+        return this.set_sub_data(offset, data.length, data.ptr);
+    }
 
     // Should be safe
     @trusted
