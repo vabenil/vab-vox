@@ -2,7 +2,7 @@
     "name": "voxel_renderer",
     "targetType": "library",
     "#versions": ["VADGL_DebugGLCalls"],
-    "versions": ["GL_42"],
+    "versions": ["GL_46"],
 
     "configurations": [
         {
