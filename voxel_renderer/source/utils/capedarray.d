@@ -15,7 +15,7 @@ struct CapedArray(ElementType, uint capacity)
 
     E[capacity] array = void;
 
-    @property {
+    @property @safe @nogc nothrow {
         int length() const pure => this._length;
 
         // Safely modify length
@@ -30,12 +30,16 @@ struct CapedArray(ElementType, uint capacity)
     @safe @nogc nothrow
     ref inout(E) opIndex(int index) return inout => array[index];
 
+    @safe @nogc nothrow
     this(E[] array_)
     in (array.length <= capacity)
     {
         this._length = cast(uint)array_.length;
         this.array[0..array_.length] = array_;
     }
+
+    @safe @nogc nothrow
+    void clear() { this._length = 0; }
 
     int find(E value)
     {
@@ -57,16 +61,18 @@ struct CapedArray(ElementType, uint capacity)
     }
 
     // GC because of idup
-    @safe nothrow
-    bool insert(E value, int i)
+    @safe @nogc nothrow
+    bool insert(E value, int index) in (index >= 0)
     {
-        import std.stdio;
         if (_length == capacity)
             return false;
 
+        // Shift values after index 1 to the right
+        for (int j = _length; j > index; j--)
+            this.array[j] = this.array[j-1];
+
+        this.array[index] = value;
         this._length++;
-        this.array[i+1.._length] = this.array[i.._length-1].idup;
-        this.array[i] = value;
         return true;
     }
 
@@ -99,8 +105,23 @@ struct CapedArray(ElementType, uint capacity)
     }
 
     int opApply(int delegate(const E value) ops)
-        => this.opApply((int i, const E v) => ops(v));
+        => this.opApply((int _, const E v) => ops(v));
 
     int opApply(int delegate(ref E value) ops)
-        => this.opApply((int i, ref E v) => ops(v));
+        => this.opApply((int _, ref E v) => ops(v));
+}
+
+// Create an array-like interface for a "pointer" + length pair
+struct CapedArrayView(T, uint capacity)
+{
+    uint* length = null;
+    T[] mem = void;
+
+    @disable this();
+
+    this(T[] mem_slice, uint* length) in (mem.length == capacity)
+    {
+        this.mem = mem_slice;
+        this.length = length;
+    }
 }
