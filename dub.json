@@ -27,7 +27,7 @@
 	],
 	"versions": [
 		"SDL_205",
-		"GL_42",
+		"GL_46",
 		"NK_ALL",
 		"BindNuklear_Static",
 		"commented__VADGL_DebugGLCalls"

@@ -132,7 +132,7 @@ void init_globals()
 
 void init_graphics()
 {
-    gstate.win = Window("Voxel engine", GState.WINDOW_WIDTH, GState.WINDOW_HEIGHT, GLVersion.GL42);
+    gstate.win = Window("Voxel engine", GState.WINDOW_WIDTH, GState.WINDOW_HEIGHT, GLVersion.GL46);
     gstate.win.set_vsync(false);
 
     /* SDL_SetRelativeMouseMode(gstate.grab_mouse); // wrap this in Window */
