@@ -123,8 +123,12 @@ void init_globals()
 
     gstate.world = new World!MChunk();
     /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
-    /* gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox"); */
-    gstate.world.load_from_vox_file("./assets/realistic_terrain.vox");
+
+    // By Chupsmovil at https://opengameart.org/content/voxel-skeleton-set-v1
+    // No modifications to the original asset where made
+    gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox");
+
+    /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
     /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
     /* gstate.world.load_from_vox_file("./assets/11.vox"); */
 
