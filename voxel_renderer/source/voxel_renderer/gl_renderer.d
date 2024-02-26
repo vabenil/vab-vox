@@ -23,7 +23,7 @@ import voxel_grid.world;
 import voxel_grid.chunk;
 import voxel_grid.bitchunk;
 
-import common           : ivec3, vec3, Color4b;
+import common           : ivec3, ivec4, vec3, Color4b;
 import std.typecons     : Optional = Nullable, optional = nullable;
 
 
@@ -387,10 +387,8 @@ class VoxelRenderer(ChunkT)
 
     void render_header(ref ChunksHeader header)
     {
-        int[] chunk_counts;
         // TODO: Stop using magic numbers!!!
         // TODO: We have to swap and do a bunch of bs
-        ChunkInfo[32][] ChunkBatch;
         foreach (ChunkRef chunk_ref; header) {
             if (chunk_ref.queued) {
                 // Add this chunk to a batch
@@ -400,10 +398,29 @@ class VoxelRenderer(ChunkT)
         }
     }
 
+    void render_indirect_header()
+    {
+        import std.array        : array;
+        import std.range        : chain;
+        import std.algorithm    : filter, map;
+
+        auto draw_commands = create_indirect_draw_commands();
+        int[4][] chunk_coords =
+            chain(this.mesh_buffer.chunks_header[], this.mesh_buffer.tmp_chunks_header[])
+                .filter!(info => info.queued)
+                .map!(info => ivec4(info.coords[0], info.coords[1], info.coords[2], 0).array).array();
+
+        this.device.send_chunk_coords(chunk_coords);
+        this.device.set_chunk_count(cast(int)chunk_coords.length);
+        this.device.set_chunk_size(ChunkT.size);
+        this.device.multi_render_indirect(draw_commands);
+    }
+
     // TODO: No way to render chunks in batches yet, Fix that
     /// Render everything in tmp buffer and clear it
     void flush()
     {
+        /* import std.stdio; */
         /* writeln("chunk headers free: ", mesh_buffer.tmp_chunks_header.unused); */
         send_tmp_to_device(); // make sure tmp buffers are on device
 
@@ -447,10 +464,48 @@ class VoxelRenderer(ChunkT)
 
     void render()
     {
+        render_indirect_header();
         // Render main buffer
-        render_header(this.mesh_buffer.chunks_header);
+        /* render_header(this.mesh_buffer.chunks_header); */
         // Render tmp
-        render_header(this.mesh_buffer.tmp_chunks_header);
+        /* render_header(this.mesh_buffer.tmp_chunks_header); */
+    }
+
+    // TODO: Perhaps put rendering commands in different places
+    auto create_indirect_draw_commands()
+    {
+        import std.range            : chain;
+        import utils.capedarray;
+        // TODO: Maybe preallocate this shit on class init or smth
+        // Can't batch render more than 256 render commands
+
+        // NOTE: GC
+        static DrawElementsIndirectCommand[] draw_commands;
+        draw_commands.length = 0; // set length to 0, since it's static
+
+        // We gotta render the shit in temporal chunk
+        // And in non-temp
+        // TODO: To avoid unnessary extra calculation in chunk and shit I should
+        // just make a draw rendering list. Which contains which chunks
+        // need to be rendered. It Could contain ChunkRef, or just something
+        // that points at the fucking chunk headers
+
+        auto chunks_headers = chain(this.mesh_buffer.chunks_header[], this.mesh_buffer.tmp_chunks_header[]);
+        // Use chain or something
+        foreach (ChunkRef chunk_ref; chunks_headers) {
+            if (chunk_ref.queued) {
+                draw_commands ~= DrawElementsIndirectCommand(
+                    count: 6,
+                    instance_count: chunk_ref.size,
+                    index: 0,
+                    base_vertex: 0, base_instance: chunk_ref.index
+                );
+            }
+        }
+
+        // Send commands to the GL_DRAW_INDIRECT_BUFFER buffer
+
+        return draw_commands[];
     }
 
     /* void render(uint start, uint count) => device.render(start, count); */

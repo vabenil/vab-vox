@@ -8,9 +8,10 @@ import vadgl;
 
 public import voxel_renderer.device;
 
-// Instance renderer
+// Shader for indirect instance rendering
+// Or just rendering chunk by chunk
 static immutable string vertex_source = q{
-    #version 330 core
+    #version 460 core
 
     layout(location=0) in ivec2 model_pos;
     layout(location=1) in ivec3 pos;
@@ -24,22 +25,17 @@ static immutable string vertex_source = q{
     // NOTE: It would be much better to either use a uniform buffer, or just
     // and average old buffer for this shit
     // u_chunk_pos for rendering
-    uniform int u_chunk_count;
     // TODO: Probably add LOD later here
 
-    struct ChunkInfo
+    /* uniform ivec3 u_chunk_pos; */
+
+    uniform ivec3 u_chunk_count;
+
+    layout(std140, binding = 1) uniform ChunkCoords
     {
-        int pos[3];
-        int index;
-        int size;
+        ivec4 u_chunk_coords[256];
     };
 
-    layout(std140) uniform ChunksHeader
-    {
-        ChunkInfo chunk_header[];
-    };
-
-    uniform ivec3 u_chunk_pos;
     uniform mat4 u_trans_mat;
 
     out vec4 v_color;
@@ -51,6 +47,15 @@ static immutable string vertex_source = q{
         uvec3(0u, 0u, 1u)
     );
 
+
+    ivec3 unpack_pos(uint packed_pos)
+    {
+        return ivec3(
+                packed_pos & 0x3ffu,
+                (packed_pos << 10) & 0x3ffu,
+                (packed_pos << 20) & 0x3ffu);
+    }
+
     vec3 get_world_pos()
     {
         uint face_id, dim, sbit;
@@ -58,6 +63,12 @@ static immutable string vertex_source = q{
         face_id = uint(packed_size & 0x7u);
         dim = face_id % 3u;
         sbit = uint(face_id > 2u);
+
+        /* ivec3 u_chunk_pos = ivec3( */
+        /*         u_chunk_coords[gl_DrawID * 3], */
+        /*         u_chunk_coords[gl_DrawID * 3 + 1], */
+        /*         u_chunk_coords[gl_DrawID * 3 + 2]); */
+        ivec3 u_chunk_pos = u_chunk_coords[gl_DrawID].xyz;
 
         vec3 delta = vec3(uvec3(identity[dim]) & sbit);
         /* vec3 face_pos = vec3( pos) + delta; */
@@ -158,6 +169,15 @@ struct Packed
     }
 }
 
+struct DrawElementsIndirectCommand
+{
+    uint count;
+    uint instance_count;
+    uint index;
+    int base_vertex;
+    uint base_instance;
+}
+
 /+
     NOTE: I'm still figuring out the general interface for this thing.
     I will learn a bunch of stuff if I ever rewrite this on another framework.
@@ -206,6 +226,18 @@ class GLDevice : VoxelDevice
         VArrayObject vao;
         // TODO: We might need another vbo for far objects;
         VBufferObject vbo;
+        /++
+            Contains ChunksHeader data so:
+
+            // Realization. I don't need the indices
+            {
+                int[3] chunk_pos;
+                int chunk_index; // offset in the buffer (in faces/instances)
+                int chunk_size; // the amount of faces this chunk has
+            }
+         +/
+        VBufferObject ubo; /// uniform buffer object
+        VBufferObject ibo; /// indirect buffer object
         VBufferObject ebo;
         VBufferObject model_vbo;
 
@@ -225,6 +257,9 @@ class GLDevice : VoxelDevice
 
     void set_chunk_pos(ivec3 chunk_pos)
         => uniforms["u_chunk_pos"].set_v(chunk_pos.array).throw_on_error();
+
+    void set_chunk_count(int chunk_count)
+        => uniforms["u_chunk_count"].set(chunk_count).throw_on_error();
 
     void set_chunk_size(int size)
         => uniforms["u_chunk_size"].set(size).throw_on_error();
@@ -269,11 +304,22 @@ class GLDevice : VoxelDevice
         // Create buffers
         vao = VArrayObject.create().throw_on_error();
         vbo = VBufferObject.create().throw_on_error();
+        ubo = VBufferObject.create(GL_UNIFORM_BUFFER).throw_on_error();
+        ibo = VBufferObject.create(GL_DRAW_INDIRECT_BUFFER).throw_on_error();
         ebo = VBufferObject.create(GL_ELEMENT_ARRAY_BUFFER).throw_on_error();
         model_vbo = VBufferObject.create().throw_on_error();
 
+        ubo.bind().throw_on_error();
+        writeln("initialize ubo with size: ", (int[3]).sizeof * 256);
+        ubo.set_data((int[4]).sizeof * 256, null, GL_STREAM_DRAW).throw_on_error();
+        gl_wrap!glBindBufferBase(GL_UNIFORM_BUFFER, 1, ubo.id).throw_on_error();
+
+        // Allocate enough for rendering 256 chunks
+        ibo.bind().throw_on_error();
+        ibo.set_data(DrawElementsIndirectCommand.sizeof * 256, null, GL_STREAM_DRAW).throw_on_error;
+
         // Send ebo data
-        ebo.bind(GL_ARRAY_BUFFER).throw_on_error(); // Set target for model
+        ebo.bind().throw_on_error(); // Set target for model
         ebo.set_data(QUAD_INDICES[], GL_STATIC_DRAW).throw_on_error();
 
         // Send model data
@@ -281,13 +327,14 @@ class GLDevice : VoxelDevice
         model_vbo.set_data(QUAD_MODEL[], GL_STATIC_DRAW).throw_on_error();
 
         VBufferObject.disable(GL_ARRAY_BUFFER);
+        VBufferObject.disable(GL_ELEMENT_ARRAY_BUFFER);
+        VBufferObject.disable(GL_DRAW_INDIRECT_BUFFER);
 
         enum uint vertex_size = 20;
 
         uniforms["u_trans_mat"] = GLUniform.from_name("u_trans_mat", program.id).throw_on_error();
         uniforms["u_chunk_size"] = GLUniform.from_name("u_chunk_size", program.id).throw_on_error();
         uniforms["u_chunk_pos"] = GLUniform.from_name("u_chunk_pos", program.id).throw_on_error();
-
         uniforms["u_chunk_count"] = GLUniform.from_name("u_chunk_count", program.id).throw_on_error();
 
         attributes = [
@@ -299,9 +346,11 @@ class GLDevice : VoxelDevice
 
         // TODO: set mpv matrix uniform here
         vao.bind().throw_on_error();
+        ibo.bind().throw_on_error();
+        ubo.bind().throw_on_error();
         ebo.bind().throw_on_error();
-        model_vbo.bind().throw_on_error();
 
+        model_vbo.bind().throw_on_error();
         // set the `model_vbo` attribute
         attributes["model_pos"].enable().throw_on_error();
         attributes["model_pos"].setI((int[2]).sizeof).throw_on_error();
@@ -323,6 +372,11 @@ class GLDevice : VoxelDevice
         attributes["packed_size"].set_divisor(1).throw_on_error();
 
         vao.disable(); // ALWAYS unbind vao first
+        vbo.disable();
+        ebo.disable();
+        ibo.disable();
+        ubo.disable();
+        model_vbo.disable();
 
         /* gl_clear_color(1.0, 1.0, 1.0f, 1.0f); */
         int result;
@@ -383,6 +437,15 @@ class GLDevice : VoxelDevice
         vbo.disable();
     }
 
+    void send_indirect_commands(DrawElementsIndirectCommand[] draw_commands)
+    {
+        void[] command_buffer = draw_commands;
+
+        ibo.bind().throw_on_error();
+        ibo.set_sub_data(0, command_buffer).throw_on_error();
+        /* ibo.disable(); */
+    }
+
     /*
         TODO: Probably best idea is to make a big buffer to store
         meshes for multiple buffers and then draw slices of the buffer
@@ -402,6 +465,31 @@ class GLDevice : VoxelDevice
         assert(0, "Not implmeented yet");
     }
 
+    void send_chunk_coords(int[4][] chunk_coords)
+    {
+        /* import std.stdio; */
+        /* writeln(chunk_coords); */
+        ubo.bind().throw_on_error();
+        ubo.set_sub_data(0, chunk_coords).throw_on_error();
+        ubo.disable();
+    }
+
+    void multi_render_indirect(DrawElementsIndirectCommand[] draw_commands)
+    {
+        enable_gl_settings();
+        program.use().throw_on_error();
+
+        send_indirect_commands(draw_commands);
+
+        vao.bind().throw_on_error();
+        gl_wrap!glMultiDrawElementsIndirect(
+            GL_TRIANGLES, GL_UNSIGNED_INT, null,
+            cast(int)draw_commands.length, 0
+        ).throw_on_error;
+
+        vao.disable();
+    }
+
     void render(uint start, uint count)
     {
         enable_gl_settings();
@@ -409,6 +497,9 @@ class GLDevice : VoxelDevice
 
         vao.bind().throw_on_error();
 
+        // I don't really need to change representation of shit because anyway
+        // I gotta love to get freaking rendering commands
+        // Ok so here multi draw would kinda fit
         // Use this function
         gl_wrap!glDrawElementsInstancedBaseInstance(
             GL_TRIANGLES, 6, GLType.UINT, null, count, start,
