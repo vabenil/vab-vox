@@ -23,7 +23,7 @@ import voxel_grid.world;
 import voxel_grid.chunk;
 import voxel_grid.bitchunk;
 
-import common           : ivec3, vec3, Color4b;
+import common           : ivec3, ivec4, vec3, Color4b;
 import std.typecons     : Optional = Nullable, optional = nullable;
 
 

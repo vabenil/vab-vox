@@ -9,6 +9,7 @@ private import std.algorithm    : among;
 
 alias vec3 = Vector!(float, 3);
 alias ivec3 = Vector!(int, 3);
+alias ivec4 = Vector!(int, 4);
 
 private T min(T)(T a, T b) pure => a < b ? a : b;
 
