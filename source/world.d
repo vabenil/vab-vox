@@ -4,7 +4,7 @@ import voxel_grid.voxel;
 import voxel_grid.chunk;
 import voxel_grid.world     : VoxelWorld;
 
-import common               : IVec3 = ivec3, vec;
+import common               : IVec3 = ivec3, Vec3 = vec3, vec, floor;
 import std.typecons        : Optional = Nullable, optional = nullable;
 
 // Maybe use class here
@@ -16,9 +16,9 @@ class World(ChunkT) : VoxelWorld!ChunkT
 
     VoxelT set_voxel(int[3] pos, VoxelT voxel)
     {
-        IVec3 chunk_pos = pos.vec() / ChunkT.size;
-        IVec3 rel_pos = pos.vec() % ChunkT.size;
-
+        IVec3 chunk_pos = IVec3(floor(Vec3(pos.vec()) / cast(float)ChunkT.size));
+        /* IVec3 rel_pos = pos.vec() % ChunkT.size; */
+        IVec3 rel_pos = ((pos.vec() % ChunkT.size) + ChunkT.size) % ChunkT.size;
         if (ChunkT* chunk = chunk_pos.array in this.chunk_map) {
             (*chunk)[rel_pos.array] = voxel;
         }
@@ -32,7 +32,8 @@ class World(ChunkT) : VoxelWorld!ChunkT
     Optional!VoxelT get_voxel(int[3] pos) const
     {
         IVec3 chunk_pos = pos.vec() / ChunkT.size;
-        IVec3 rel_pos = pos.vec() % ChunkT.size;
+        /* IVec3 rel_pos = pos.vec() % ChunkT.size; */
+        IVec3 rel_pos = ((pos.vec() % ChunkT.size) + ChunkT.size) % ChunkT.size;
 
         if (const(ChunkT*) chunk = chunk_pos.array in this.chunk_map) {
             return (*chunk)[rel_pos.array].optional;
@@ -40,7 +41,7 @@ class World(ChunkT) : VoxelWorld!ChunkT
         return VoxelT().optional;
     }
 
-    void load_from_vox_file(string vox_path)
+    void load_from_vox_file(string vox_path, IVec3 origin = IVec3(0, 0, 0))
     {
         import voxd;
         import common.color;
@@ -68,9 +69,11 @@ class World(ChunkT) : VoxelWorld!ChunkT
         /* foreach (i; parallel(model.width.iota)) { */
             auto m_vox = model.voxel(i, j, k); // magica voxel
             immutable Color4b color_ = Color4b(m_vox.r, m_vox.g, m_vox.b, m_vox.a);
+
+            IVec3 vox_pos = IVec3(i, k, j) + origin;
             /* Color4b color = Color4b(m_vox.a, m_vox.b, m_vox.r, m_vox.g); */
             if (color_ != Color4b.EMPTY) {
-                this[i, k, j] = VoxelT(color_.to_hex());
+                this[vox_pos.array] = VoxelT(color_.to_hex());
             }
         }
 
