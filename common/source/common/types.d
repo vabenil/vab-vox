@@ -1,8 +1,9 @@
 module common.types;
 
-private import std.traits       : isNumeric;
+private import std.traits       : isNumeric, isFloatingPoint;
 private import std.format       : format;
 private import std.algorithm    : among;
+private import std.math         : floor;
 
 // all here is SAFE and no heap ALLOCATIONS will happen in this module
 @safe @nogc nothrow:
@@ -53,6 +54,13 @@ struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
         this.array = [args];
     }
 
+    // Convert vector of some other type to this type
+    this(T)(Vector!(T, N) vector) if (isNumeric!T)
+    {
+        static foreach (i; 0..N)
+            this[i] = cast(BT)vector[i];
+    }
+
     bool opEquals(This b) const pure
     {
         bool is_equal = true;
@@ -63,7 +71,7 @@ struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
         return is_equal;
     }
 
-    BT opIndex(long i) const pure => this.array[i];
+    ref inout(BT) opIndex(long i) inout return pure => this.array[i];
 
     // TODO: It may be better to use this.array[] += v.array[]
     This opBinary(string op)(const This v) const pure if (op.among("+", "-"))
@@ -96,6 +104,9 @@ struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
         return typeid(BT[N]).getHash(&this);
     }
 }
+
+Vector!(T, N) floor(T, ulong N)(Vector!(T, N) v) if (isFloatingPoint!T)
+    => Vector!(T, N)(floor(v.x), floor(v.y), floor(v.z));
 
 // Convenience function to convert to vector
 Vector!(T, N) vec(T, ulong N)(T[N] arr) pure => Vector!(T, N)(arr);
