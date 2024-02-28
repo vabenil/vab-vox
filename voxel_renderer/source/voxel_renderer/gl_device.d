@@ -1,7 +1,7 @@
 // Meant to be used with gl_renderere
 module voxel_renderer.gl_device;
 
-import common   : vec3, ivec3, Color4b;
+import common   : vec3, ivec3, ivec4, Color4b;
 
 import bindbc.opengl;
 import vadgl;
@@ -35,6 +35,19 @@ static immutable string vertex_source = q{
     {
         ivec4 u_chunk_coords[256];
     };
+
+    /*
+       Ok so u_chunk_coords is an ordered array, and in all honesty I don't
+       expect it to be that big. For the time being since I know the amount
+       of chunks being rendered, the index of the current instance via
+       `gl_InstanceID` and lowest & highest I can do a binary search for
+
+       log(n) searching performance.
+
+       |       |       |
+       |   |   |       | 
+       | | |   |       |
+   */
 
     uniform mat4 u_trans_mat;
 
@@ -255,8 +268,15 @@ class GLDevice : VoxelDevice
     void set_mpv_matrix(const(float[4][4]) mat, bool normalize=false)
         => set_mpv_matrix(cast(const(float[16]))mat, normalize);
 
+    /* void set_chunk_pos(ivec3 chunk_pos) */
+    /*     => uniforms["u_chunk_pos"].set_v(chunk_pos.array).throw_on_error(); */
+
     void set_chunk_pos(ivec3 chunk_pos)
-        => uniforms["u_chunk_pos"].set_v(chunk_pos.array).throw_on_error();
+    {
+        int[4][1] pos = [[chunk_pos.x, chunk_pos.y, chunk_pos.z, 0]];
+        send_chunk_coords(pos[]);
+    }
+
 
     void set_chunk_count(int chunk_count)
         => uniforms["u_chunk_count"].set(chunk_count).throw_on_error();

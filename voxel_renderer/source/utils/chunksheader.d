@@ -66,6 +66,12 @@ struct ChunkRef
         }
     }
 
+    bool is_adjacent(ChunkRef info)
+        => (
+            this.index == (info.index + info.size) || // adjacent to the right
+            (this.index + this.size) == info.index // Adja cent to the left
+        );
+
     @property
     ref inout(int[3]) coords() return inout => header.coords[header_id];
 
