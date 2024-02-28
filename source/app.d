@@ -122,16 +122,16 @@ void init_globals()
     gstate.camera.look_at(); // calculate view matrix
 
     gstate.world = new World!MChunk();
-    /* gstate.world.load_from_vox_file("./assets/SmallBuilding01.vox"); */
+    /* gstate.world.load_from_vox_file("./res/assets/SmallBuilding01.vox"); */
 
     // By Chupsmovil at https://opengameart.org/content/voxel-skeleton-set-v1
     // No modifications to the original asset where made
-    gstate.world.load_from_vox_file("./assets/11_SKELLINGTON_CHAMPION.vox");
+    /* gstate.world.load_from_vox_file("./res/assets/11_SKELLINGTON_CHAMPION.vox", IVec3(0, 0, 0)); */
 
-    /* gstate.world.load_from_vox_file("./assets/realistic_terrain.vox"); */
-    /* gstate.world.load_from_vox_file("./assets/Plane04.vox"); */
-    /* gstate.world.load_from_vox_file("./assets/11.vox"); */
+    gstate.world.load_from_vox_file("./res/assets/realistic_terrain.vox");
+    /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-2, 3, 0) * 32); */
 
+    /* gstate.world.load_from_vox_file("./res/assets/11.vox", IVec3(-2, 0, 1) * 32); */
 }
 
 void init_graphics()
@@ -166,6 +166,8 @@ void main_loop()
 
     int ticks = 1;
     double duration_sum = 1;
+
+    writeln("Chunk size: ", MChunk.size);
 
     SDL_EHandler event_handler;
     event_handler.add_handler("quit", delegate(e) { gstate.quit = true; });
