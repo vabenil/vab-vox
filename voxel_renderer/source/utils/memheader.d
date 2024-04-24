@@ -34,6 +34,17 @@ private enum isSameType(T1, T2) = is(T1 == T2);
  +/
 struct MemHeader
 {
+    struct Range
+    {
+        int index = 0;
+        MemHeader* mem_header;
+
+        MemRange front() => mem_header.mem_blocks[index]; 
+        void popFront() { index++; }
+        bool empty() => index >= mem_header.mem_blocks.length;
+    }
+
+    //  TODO: Make a public getter and make the field itself private
     /// Amount of memory used
     int used = 0;
     /// Total capacity of the buffer
@@ -47,7 +58,7 @@ struct MemHeader
        TODO: If I want this shit to be `@nogc` I need to use `std.container.array`
        or use my own implementation
    */
-    MemRange[] mem_blocks;
+    private MemRange[] mem_blocks;
 
     this(int cap, int mem_block_init_cap = 32)
     {
@@ -61,7 +72,7 @@ struct MemHeader
     int unused() const pure => this.capacity - this.used;
 
     int allocate(int size)
-    /* in (this.unused >= size, "Not enough space") */
+    in (this.unused >= size, "Not enough space")
     {
         import std.array    : insertInPlace;
         int mem_block_i = this.find_free_mem(size);
@@ -105,20 +116,20 @@ struct MemHeader
         return buff[start..start+size];
     }
 
+    // TODO: Implement resizing up, and call it realloc
     // I only want to resize down for now
     void resize(int start, int new_size)
     {
         import std.algorithm            : countUntil;
         long index = this.mem_blocks.countUntil!(block => block.start == start);
         assert(index != -1);
-
         MemRange* block = &this.mem_blocks[index];
         assert(new_size <= (*block).size());
 
         int diff = (*block).size() - new_size;
-        // Update block end
+        // #### Update block end and used memory.
+        // #### This is literally the only thing this function does
         block.end = block.start + new_size;
-
         this.used -= diff;
     }
 
@@ -200,4 +211,7 @@ struct MemHeader
         }
         return result;
     }
+
+    // TODO: Use opSlice, makes more sence
+    Range opSlice() => Range(0, &this);
 }
