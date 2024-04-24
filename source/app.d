@@ -11,6 +11,7 @@ import sdl_ehandler;
 import world;
 
 import common.color;
+/* import common.utils; */
 import common.types     : IVec3 = ivec3, vec;
 import voxel_grid.chunk;
 import voxel_grid.voxel;
@@ -26,6 +27,12 @@ alias MChunk = VoxelChunk!(Voxel, 6);
 
 struct GState
 {
+    struct WinState
+    {
+        bool focused = true;
+        bool grab_mouse = true;
+        bool quit = false;
+    }
     /* enum int WINDOW_WIDTH = 960; */
     /* enum int WINDOW_HEIGHT = 540; */
     enum int WINDOW_WIDTH = 1152;
@@ -33,25 +40,44 @@ struct GState
     /* enum int WINDOW_WIDTH = 1920; */
     /* enum int WINDOW_HEIGHT = 1080; */
 
-    bool grab_mouse = true;
-    bool quit = false;
+    WinState prev_state;
+    WinState win_state;
+
     Camera camera;
     Window win;
-    VoxelRenderer!MChunk renderer;
+    GLVoxelRenderer!MChunk renderer;
     World!MChunk world;
 }
 
 // TODO: perhaps pass this as an argument instead of global
 __gshared GState gstate;
 
+bool should_grab_window()
+{
+    static bool has_window_focus_changed()
+        => gstate.win_state.focused != gstate.prev_state.focused;
+
+    static bool has_mouse_grab_changed()
+        => gstate.win_state.grab_mouse != gstate.prev_state.grab_mouse;
+
+    return has_window_focus_changed() || has_mouse_grab_changed();
+}
+
+bool should_grab_mouse()
+{
+    return gstate.win_state.focused && gstate.win_state.grab_mouse;
+}
+
 void on_mouse_move(SDL_Event *e)
 {
+    if (!gstate.win_state.focused)
+        return;
+
     gstate.camera.yaw += e.motion.xrel * gstate.camera.sensitivity;
     gstate.camera.pitch -= e.motion.yrel * gstate.camera.sensitivity;
     // Roll changes the up vector
 
-    if (gstate.camera.pitch > 89.9f) gstate.camera.pitch = 89.9f;
-    if (gstate.camera.pitch < -89.9f) gstate.camera.pitch = -89.9f;
+    gstate.camera.pitch = gstate.camera.pitch.clamp(-80.0f, 80.0f);
 }
 
 void on_key_down(SDL_Event* e)
@@ -66,9 +92,13 @@ void on_key_down(SDL_Event* e)
     float x_increase = dir_2d.x * speed;
     float z_increase = dir_2d.y * speed;
 
+    // Don't do anything if window is not grabbed
+    if (!gstate.win_state.focused)
+        return;
+
     const ubyte *keyboard_state = SDL_GetKeyboardState(null);
     if (keyboard_state[SDL_SCANCODE_Q])
-        gstate.quit = true;
+        gstate.win_state.quit = true;
 
     vec3 delta = vec3(0.0f);
     if (keyboard_state[SDL_SCANCODE_A]) {
@@ -87,7 +117,7 @@ void on_key_down(SDL_Event* e)
     }
 
     if (keyboard_state[SDL_SCANCODE_E]) {
-        gstate.grab_mouse = !gstate.grab_mouse;
+        gstate.win_state.grab_mouse = !gstate.win_state.grab_mouse;
     }
 
     if (keyboard_state[SDL_SCANCODE_F]) {
@@ -111,6 +141,16 @@ void on_key_down(SDL_Event* e)
     gstate.camera.pos += delta;
 }
 
+void on_window_focus(SDL_Event* e)
+{
+    if (e.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+        gstate.win_state.focused = true;
+    }
+    else if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+        gstate.win_state.focused = false;
+    }
+}
+
 void init_globals()
 {
     vec3 pos = vec3(15.0f, 8.0f, -15.0f);
@@ -122,14 +162,20 @@ void init_globals()
     gstate.camera.look_at(); // calculate view matrix
 
     gstate.world = new World!MChunk();
+
+    /* for (int j = 0; j < 256; j++) */
+    /* for (int i = 0; i < 256; i++) */
+    /*     gstate.world.set_voxel([j-128, 0, i-128], Voxel(Color4b.WHITE.to_hex)); */
     /* gstate.world.load_from_vox_file("./res/assets/SmallBuilding01.vox"); */
 
     // By Chupsmovil at https://opengameart.org/content/voxel-skeleton-set-v1
     // No modifications to the original asset where made
-    /* gstate.world.load_from_vox_file("./res/assets/11_SKELLINGTON_CHAMPION.vox", IVec3(0, 0, 0)); */
+    /* gstate.world.load_from_vox_file("./res/assets/11_SKELLINGTON_CHAMPION.vox", IVec3(-8, 1, -8)); */
 
     gstate.world.load_from_vox_file("./res/assets/realistic_terrain.vox");
-    /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-2, 3, 0) * 32); */
+    /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(28, 64, 48)); */
+    /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-48, 20, 48)); */
+    /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-48, 190, 48)); */
 
     /* gstate.world.load_from_vox_file("./res/assets/11.vox", IVec3(-2, 0, 1) * 32); */
 }
@@ -139,24 +185,33 @@ void init_graphics()
     gstate.win = Window("Voxel engine", GState.WINDOW_WIDTH, GState.WINDOW_HEIGHT, GLVersion.GL46);
     gstate.win.set_vsync(false);
 
-    /* SDL_SetRelativeMouseMode(gstate.grab_mouse); // wrap this in Window */
+    // wrap this in Window
+    SDL_SetRelativeMouseMode(gstate.win_state.grab_mouse);
     glClearColor(0.3, 0.3, 0.3, 1); // wrap this in vadgl
 
     GLDevice device = new GLDevice();
     device.device_init();
 
-    gstate.renderer = new VoxelRenderer!MChunk(device);
-    gstate.renderer.allocate_buffers();
+    gstate.renderer = new GLVoxelRenderer!MChunk(device);
+    gstate.renderer.device_init();
 
     foreach (pos, chunk; gstate.world) {
         gstate.renderer.commit_chunk(chunk, pos.vec());
+        gstate.renderer.queue_chunk(pos.vec(), chunk);
     }
 
     gstate.renderer.send_to_device();
 
-    writeln("face count - ",
-            gstate.renderer.mesh_buffer.cpu_header.used +
-            gstate.renderer.mesh_buffer.tmp_header.used);
+    // TODO: Maybe add a renderer.log_info();
+    /* writeln("face count - ", gstate.renderer.mesh_container.buff_size); */
+}
+
+void update_state()
+{
+    if (should_grab_window())
+        SDL_SetRelativeMouseMode(should_grab_mouse());
+
+    gstate.prev_state = gstate.win_state;
 }
 
 void main_loop()
@@ -170,13 +225,14 @@ void main_loop()
     writeln("Chunk size: ", MChunk.size);
 
     SDL_EHandler event_handler;
-    event_handler.add_handler("quit", delegate(e) { gstate.quit = true; });
+    event_handler.add_handler("quit", delegate(e) { gstate.win_state.quit = true; });
     event_handler.add_handler("mouse_move", &on_mouse_move);
     event_handler.add_handler("key_down", &on_key_down);
-    while (!gstate.quit) {
+    event_handler.add_handler("window_focus", &on_window_focus);
+    while (!gstate.win_state.quit) {
         event_handler.handle_sdl_events(&gstate);
 
-        SDL_SetRelativeMouseMode(gstate.grab_mouse); // wrap this in Window
+        update_state();
 
         StopWatch watch = StopWatch(AutoStart.no);
         watch.start();
@@ -185,11 +241,9 @@ void main_loop()
         /* camera.set_direction(); */
         gstate.camera.look_at();
 
+        gstate.renderer.get_device().set_camera_pos(gstate.camera.pos.vector.vec());
         gstate.renderer.get_device().set_mpv_matrix(gstate.camera.mpv(), true);
 
-        foreach (pos, chunk; gstate.world) {
-            gstate.renderer.queue_chunk(pos.vec(), chunk);
-        }
         gstate.renderer.render();
 
         gstate.win.swap_buffer();
@@ -205,6 +259,7 @@ void main_loop()
         ticks++;
     }
 }
+
 void main()
 {
     init_globals();
