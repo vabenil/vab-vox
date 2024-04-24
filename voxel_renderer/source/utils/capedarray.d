@@ -19,10 +19,7 @@ struct CapedArray(ElementType, uint capacity)
         int length() const pure => this._length;
 
         // Safely modify length
-        void length(uint new_length) in(new_length <= capacity )
-        {
-            this._length = new_length;
-        }
+        void length(uint new_length) in(new_length <= capacity ) { this._length = new_length; }
 
         uint opDollar(size_t dim : 0)() const pure => this.length;
     }
@@ -64,8 +61,7 @@ struct CapedArray(ElementType, uint capacity)
     @safe @nogc nothrow
     bool insert(E value, int index) in (index >= 0)
     {
-        if (_length == capacity)
-            return false;
+        if (_length == capacity) return false;
 
         // Shift values after index 1 to the right
         for (int j = _length; j > index; j--)
