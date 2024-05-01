@@ -309,7 +309,7 @@ struct ChunkBufferHeader
         this.mem_headers[buffer_id].free(mem_block.start);
 
         // Update memblock in chunk_header
-        *mem_block = ChunkMemBlock(buff_id: buffer_id, start: -1, end: -1, MeshState.ON_DEVICE);
+        *mem_block = ChunkMemBlock(buff_id: buffer_id, start: -1, end: -1, MeshState.NONE);
     }
 
     /// ditto
