@@ -370,8 +370,10 @@ struct ChunkBufferHeader
 // Shitty test, but proves things at least kinda work how I expect
 unittest
 {
+    // TODO: Update test with more stuff so it actually catches bugs
     import std.stdio;
-    import vertex;
+
+    struct VoxelVertex { uint hex_color; int face_id; }
 
     VoxelVertex[] buffer;
     buffer.length = 8;
