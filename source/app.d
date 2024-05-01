@@ -1,3 +1,8 @@
+/++
+    This is simply a demo for the voxel renderer. Mostly to check that everything
+    is working well
+++/
+
 import std.stdio;
 
 import bindbc.sdl;
@@ -11,8 +16,7 @@ import sdl_ehandler;
 import world;
 
 import common.color;
-/* import common.utils; */
-import common.types     : IVec3 = ivec3, vec;
+import common.types     : Vec3 = vec3, IVec3 = ivec3, vec;
 import voxel_grid.chunk;
 import voxel_grid.voxel;
 
@@ -73,11 +77,45 @@ void on_mouse_move(SDL_Event *e)
     if (!gstate.win_state.focused)
         return;
 
-    gstate.camera.yaw += e.motion.xrel * gstate.camera.sensitivity;
-    gstate.camera.pitch -= e.motion.yrel * gstate.camera.sensitivity;
+    Camera* camera = &gstate.camera;
+    camera.yaw += e.motion.xrel * gstate.camera.sensitivity;
+    camera.pitch -= e.motion.yrel * camera.sensitivity;
     // Roll changes the up vector
 
-    gstate.camera.pitch = gstate.camera.pitch.clamp(-80.0f, 80.0f);
+    camera.pitch = camera.pitch.clamp(-80.0f, 80.0f);
+}
+
+void on_mouse_click(SDL_Event *e)
+{
+    import vabray;
+
+    enum float MAX_DISTANCE = 64.0f;
+
+    Camera* camera = &gstate.camera;
+    auto world = gstate.world;
+    // I gotta do some raycasting bullshit here
+
+    bool is_left_click = (e.button.button == SDL_BUTTON_LEFT);
+    if (is_left_click) {
+        Vec3 direction = (cast(Vec3)camera.direction());
+        direction[2] *= -1;
+
+        Ray ray = Ray(camera.pos.vector.vec(), direction);
+
+        foreach (float dist, IVec3 pos, IVec3 face; ray.raymarch()) {
+            if (!world[pos.array].is_empty()) {
+                writeln("Collision at ", pos);
+
+                world[(pos + face).array] = Voxel(Color4b.BLUE.to_hex);
+                auto chunk_pos = pos / MChunk.size;
+                auto chunk = chunk_pos.array in world.chunk_map ;
+                gstate.renderer.commit_chunk(*chunk, chunk_pos);
+            }
+
+            if (dist >= MAX_DISTANCE)
+                break;
+        }
+    }
 }
 
 void on_key_down(SDL_Event* e)
@@ -163,16 +201,16 @@ void init_globals()
 
     gstate.world = new World!MChunk();
 
-    /* for (int j = 0; j < 256; j++) */
-    /* for (int i = 0; i < 256; i++) */
-    /*     gstate.world.set_voxel([j-128, 0, i-128], Voxel(Color4b.WHITE.to_hex)); */
+    for (int j = 0; j < 256; j++)
+    for (int i = 0; i < 256; i++)
+        gstate.world.set_voxel([j-128, 0, i-128], Voxel(Color4b.WHITE.to_hex));
     /* gstate.world.load_from_vox_file("./res/assets/SmallBuilding01.vox"); */
 
     // By Chupsmovil at https://opengameart.org/content/voxel-skeleton-set-v1
     // No modifications to the original asset where made
     /* gstate.world.load_from_vox_file("./res/assets/11_SKELLINGTON_CHAMPION.vox", IVec3(-8, 1, -8)); */
 
-    gstate.world.load_from_vox_file("./res/assets/realistic_terrain.vox");
+    /* gstate.world.load_from_vox_file("./res/assets/realistic_terrain.vox"); */
     /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(28, 64, 48)); */
     /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-48, 20, 48)); */
     /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-48, 190, 48)); */
@@ -196,8 +234,8 @@ void init_graphics()
     gstate.renderer.device_init();
 
     foreach (pos, chunk; gstate.world) {
-        gstate.renderer.commit_chunk(chunk, pos.vec());
-        gstate.renderer.queue_chunk(pos.vec(), chunk);
+        gstate.renderer.load_chunk(chunk, pos.vec());
+        gstate.renderer.queue_chunk(chunk, pos.vec());
     }
 
     gstate.renderer.send_to_device();
@@ -227,8 +265,10 @@ void main_loop()
     SDL_EHandler event_handler;
     event_handler.add_handler("quit", delegate(e) { gstate.win_state.quit = true; });
     event_handler.add_handler("mouse_move", &on_mouse_move);
+    event_handler.add_handler("mouse_click", &on_mouse_click);
     event_handler.add_handler("key_down", &on_key_down);
     event_handler.add_handler("window_focus", &on_window_focus);
+
     while (!gstate.win_state.quit) {
         event_handler.handle_sdl_events(&gstate);
 
@@ -253,7 +293,7 @@ void main_loop()
         double fps = 1_000_000 / avg_dur; // don't count writeln
 
         if (ticks % 10 == 0)
-            writeln(cast(int)fps);
+            writeln("pos: ", gstate.camera.pos, ", FPS: ", cast(int)fps);
 
         duration_sum += watch.peek.total!"usecs";
         ticks++;
