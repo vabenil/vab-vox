@@ -1,35 +1,30 @@
 {
-	"authors": [
-		"Victor Abenil Fernandez Rodriguez"
-	],
-	"copyright": "Copyright © 2023, Victor Abenil Fernandez Rodriguez",
-	"dependencies": {
-		"bindbc-opengl": "1.1.0",
-		"bindbc-sdl": "1.4.2",
-		"inmath": "~>1.0.5",
-		"vox-d": "~>1.0.0",
-		"vox_engine:common": { "path": "./common" },
-		"vox_engine:voxel_grid": { "path": "./voxel_grid" },
-		"vox_engine:vadgl": { "path": "./vadgl" },
-		"vox_engine:voxel_renderer": { "path": "./voxel_renderer" }
-	},
-	"description": "A fast Voxel engine in D",
-	"license": "MIT",
-	"name": "vox_engine",
-	"subConfigurations": {
-		"bindbc-sdl": "dynamicBC"
-	},
-	"subPackages": [
-		"./common/",
-		"./voxel_grid/",
-		"./vadgl/",
-		"./voxel_renderer/"
-	],
-	"versions": [
-		"SDL_205",
-		"GL_46",
-		"NK_ALL",
-		"BindNuklear_Static",
-		"commented__VADGL_DebugGLCalls"
-	]
+    "authors": [
+        "Victor Abenil Fernandez Rodriguez"
+    ],
+    "copyright": "Copyright © 2023, Victor Abenil Fernandez Rodriguez",
+    "dependencies": {
+        "bindbc-opengl": "1.1.0",
+        "bindbc-sdl": "1.4.2",
+        "inmath": "~>1.0.5",
+        "vox-d": "~>1.0.0",
+
+        "common": { "path": "./common" },
+        "voxel_grid": { "path": "./voxel_grid" },
+        "vadgl": { "path": "./vadgl" },
+        "voxel_renderer": { "path": "./voxel_renderer" }
+    },
+    "description": "A fast Voxel engine in D",
+    "license": "MIT",
+    "name": "vox_engine",
+    "subConfigurations": {
+        "bindbc-sdl": "dynamicBC"
+    },
+    "versions": [
+        "SDL_205",
+        "GL_46",
+        "NK_ALL",
+        "BindNuklear_Static",
+        "commented__VADGL_DebugGLCalls"
+    ]
 }
