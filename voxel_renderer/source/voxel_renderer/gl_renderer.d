@@ -130,14 +130,11 @@ struct MeshContainer
                     2 * this.cpu_buffer_sizes, 2 * this.max_face_count);
     }
 
-    /* void free_chunk(ivec3 chunk_pos) */
-    /* { */
-    /*     for (int i = 0; i < this.header.count; i++) { */
-    /*         if (this.header.coords[i] == chunk_pos) { */
+    void chunk_buffer_free(int header_id, int buffer_id)
+        => this.buffer_header.chunk_buffer_free(header_id, buffer_id);
 
-    /*         } */
-    /*     } */
-    /* } */
+    void chunk_free(int header_id) => this.buffer_header.chunk_free(header_id);
+    void chunk_free(ivec3 cpos) => this.buffer_header.chunk_free(cpos.array);
 
     VoxelVertex[] chunk_buffer_get(ivec3 cpos, int buffer_id)
     in(buffer_id.device() == Device.CPU)
@@ -244,15 +241,41 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
 
     /* void commit_voxel(VoxelT voxel, ivec3 pos); */
 
-    // Will try to create meshes, if mesh can't be created
-    // it will be stored for creating later & rendering later
+    /// Load mesh if mesh is not already loaded (state is ON_DEVICE)
+    void load_chunk(ref const ChunkT chunk, ivec3 cpos)
+    {
+        import std.algorithm    : all;
+        ChunkHeader* chunk_header = mesh_container.buffer_header.chunk_get_header(cpos.array);
+
+        if (chunk_header is null)
+            return create_chunk_mesh(chunk, cpos); // void
+
+        ChunkMemBlock[] mem_blocks = chunk_header.mem_blocks[];
+        /+
+            NOTE: In the future I might want to check if only certain buffers
+            have mesh data loaded already instead of all of them.
+        +/
+        static foreach (device_buffers; [GPU_BUFFERS, CPU_BUFFERS]) {
+            if (device_buffers[].all!(buffer => mem_blocks[buffer].state & MeshState.ON_DEVICE))
+                return ; // Meshes are in device so
+        }
+
+        return create_chunk_mesh(chunk, cpos);
+    }
+
+    /// Chunk mesh has been modified and has to be remeshed.
     void commit_chunk(ref const ChunkT chunk, ivec3 cpos) { create_chunk_mesh(chunk, cpos); }
+
+    // TODO: Make a proper render queue, with rendering commands,
+    // for rendering chunks in batches
+    /// Queue chunk for rendering may, or may not create a mesh
+    void queue_chunk(ref ChunkT chunk, ivec3 cpos) { }
 
     void send_to_device()
     {
         // Send all chunks to device no matter what for now
         foreach (header_id, header; mesh_container.get_all_indexed_chunk_headers()) {
-            foreach (buff; [Buffer.CPU_BACK_FACE, Buffer.CPU_FRONT_FACE]) {
+            foreach (buff; CPU_BUFFERS) {
                 Buffer gpu_buff = buff.parallel_buffer();
                 ChunkMemBlock cpu_mem_block = header.mem_blocks[buff]; // [WIP]
 
@@ -278,12 +301,6 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
             }
         }
     }
-
-    // TODO: Make a proper render queue, with rendering commands,
-    // for rendering chunks in batches
-    // TODO: Searching for a chunk_header is kinda of a pain. Make that easier
-    /// Queue chunk for rendering may
-    void queue_chunk(ivec3 cpos, ref ChunkT chunk) { }
 
     void render()
     {
@@ -315,7 +332,7 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
         auto chunks_headers = this.mesh_container.get_all_chunk_headers();
         // Use chain or something
         foreach (ChunkHeader header; chunks_headers) {
-            foreach (buff; [Buffer.GPU_BACK_FACE, Buffer.GPU_FRONT_FACE]) {
+            foreach (buff; GPU_BUFFERS) {
                 ChunkMemBlock mem_block = header.mem_blocks[buff];
 
                 int offset = this.mesh_container.buffer_offsets[buff];
@@ -364,10 +381,17 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
     // Render multiple chunks
     void render_chunks(ivec3[] chunk_positions, VoxelWorld!ChunkT world) { }
 
+    /++
+        Creates meshes in `CPU_BACK_FACE` and `CPU_FRONT_FACE` buffers,
+        allocates the buffers if necessary.
+
+        NOTE: This ignores the buffer MeshState, it assumes that all buffers
+        must be re-meshed
+     +/
     void create_chunk_mesh(ref const ChunkT chunk, ivec3 cpos)
     {
         import std.range    : zip;
-        // Create only front faces for now
+        // Allocate buffers and return ptr, if buffers are already allocated just return ptr
         VoxelVertex* bf_buffer = mesh_container.chunk_buffer_allocate(cpos, Buffer.CPU_BACK_FACE, MAX_FACE_COUNT);
         VoxelVertex* ff_buffer = mesh_container.chunk_buffer_allocate(cpos, Buffer.CPU_FRONT_FACE, MAX_FACE_COUNT);
 
@@ -396,7 +420,7 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
                 face_id++;
             }
 
-            debug writeln(i"face_count: $(face_count)");
+            writeln("face_count: ", face_count);
             // Resize down the buffers
             mesh_container.chunk_buffer_reallocate(cpos, buffer_id, face_count);
         }

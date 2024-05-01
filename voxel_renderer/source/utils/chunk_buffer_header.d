@@ -184,7 +184,7 @@ struct ChunkBufferHeader
 
         mem_block.start = mem_start;
         mem_block.end = mem_start + capacity;
-        mem_block.state = MeshState.ON_DEVICE;
+        mem_block.state = MeshState.SYNCHED; // We assume the thing is synched
         mem_block.buff_id = buffer_id;
 
         return chunk_header_id;
@@ -294,16 +294,15 @@ struct ChunkBufferHeader
     /++
         Stops tracking mesh memory in CPU
     ++/
-    void chunk_buffer_free(ivec3 cpos, int buffer_id)
+    void chunk_buffer_free(int header_id, int buffer_id)
     {
-        int header_id = this.chunks_header.find(cpos);
         if (header_id == -1)
             return;
 
         MChunkHeader* chunk_header = &this.chunks_header[header_id];
         ChunkMemBlock* mem_block = &chunk_header.mem_blocks[buffer_id];
 
-        if (!(mem_block.state & MeshState.ON_DEVICE))
+        if (mem_block.state == MeshState.NONE)
             return;
 
         // Update in mem_headers
@@ -313,13 +312,22 @@ struct ChunkBufferHeader
         *mem_block = ChunkMemBlock(buff_id: buffer_id, start: -1, end: -1, MeshState.ON_DEVICE);
     }
 
-    // I guess free all buffers in a chunk
-    void chunk_free(ivec3 cpos)
+    /// ditto
+    void chunk_buffer_free(ivec3 cpos, int buffer_id)
+        => chunk_buffer_free(this.chunks_header.find(cpos), buffer_id);
+
+    /// Free chunk
+    void chunk_free(int header_id)
     {
         static foreach (buff_id; 0..BC) {
-            chunk_buffer_free(cpos, buff_id);
+            chunk_buffer_free(header_id, buff_id);
         }
+        this.chunks_header.remove(header_id);
     }
+
+    // ditto
+    void chunk_free(ivec3 cpos)
+        => chunk_free(this.chunks_header.find(cpos));
 
     /++
         NOTE: This function seems to make no sense as mesh_container actually

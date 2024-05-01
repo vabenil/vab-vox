@@ -20,11 +20,13 @@ interface VoxelRenderer(ChunkT)
 
     void set_camera(vec3 pos, vec3 dir, vec3 up);
 
+    void load_chunk(ref const(ChunkT) chunk, ivec3 chunk_pos);
+
     void commit_chunk(ref const(ChunkT) chunk, ivec3 chunk_pos);
 
     /* void commit_voxel(VoxelT voxel, ivec3 pos); */
 
-    void queue_chunk(ivec3 chunk_pos, ref ChunkT chunk);
+    void queue_chunk(ref ChunkT chunk, ivec3 chunk_pos);
 
     void send_to_device();
 
