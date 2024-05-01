@@ -4,7 +4,7 @@ import voxel_grid.voxel;
 import voxel_grid.chunk;
 import voxel_grid.world     : VoxelWorld;
 
-import common               : IVec3 = ivec3, Vec3 = vec3, vec, floor;
+import common               : IVec3 = ivec3, Vec3 = vec3, vec;
 import std.typecons        : Optional = Nullable, optional = nullable;
 
 // Maybe use class here
@@ -16,7 +16,7 @@ class World(ChunkT) : VoxelWorld!ChunkT
 
     VoxelT set_voxel(int[3] pos, VoxelT voxel)
     {
-        IVec3 chunk_pos = IVec3(floor(Vec3(pos.vec()) / cast(float)ChunkT.size));
+        IVec3 chunk_pos = IVec3((Vec3(pos.vec()) / cast(float)ChunkT.size).floor);
         /* IVec3 rel_pos = pos.vec() % ChunkT.size; */
         IVec3 rel_pos = ((pos.vec() % ChunkT.size) + ChunkT.size) % ChunkT.size;
         if (ChunkT* chunk = chunk_pos.array in this.chunk_map) {
