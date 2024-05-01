@@ -19,7 +19,11 @@ enum Device
     GPU,
 }
 
+
 private enum int BC = Buffer.max + 1; // Buff count
+
+public enum Buffer[] CPU_BUFFERS = [ Buffer.CPU_BACK_FACE, Buffer.CPU_FRONT_FACE ];
+public enum Buffer[] GPU_BUFFERS = [ Buffer.GPU_BACK_FACE, Buffer.GPU_FRONT_FACE ];
 
 private enum bool isMemRange(T) = is(typeof(T.start) : int) && is(typeof(T.end) : int);
 
