@@ -249,7 +249,7 @@ struct ChunkBufferHeader
         static foreach (buffer_id; 0..BC)
         {
             cap = capacities[buffer_id];
-            mem_start = mem_headers[buffer_id].allocate(capacities[cap]);
+            mem_start = mem_headers[buffer_id].allocate(cap);
             assert(mem_start != -1);
 
             chunk_header.mem_blocks[buffer_id].start = mem_start;
