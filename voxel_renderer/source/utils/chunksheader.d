@@ -10,7 +10,7 @@ enum MeshState : int
     /++ Mesh is on device ++/
     ON_DEVICE   = 1,
     /++ Mesh is up to date in device ++/
-    SYNCHED     = 2
+    SYNCHED     = 3
 }
 
 alias ivec3 = int[3];
