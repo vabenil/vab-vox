@@ -27,7 +27,7 @@ import voxel_renderer.gl_device;
     This is probably mostly because of the number of render calls. Could be
     mitageted by rendering chunks in batches
 +/
-alias MChunk = VoxelChunk!(Voxel, 6);
+alias MChunk = VoxelChunk!(Voxel, 5);
 
 struct GState
 {
@@ -104,16 +104,23 @@ void on_mouse_click(SDL_Event *e)
 
         foreach (float dist, IVec3 pos, IVec3 face; ray.raymarch()) {
             if (!world[pos.array].is_empty()) {
-                writeln("Collision at ", pos);
+                writeln("Collision at ", pos, " - face: ", face);
 
-                world[(pos + face).array] = Voxel(Color4b.BLUE.to_hex);
-                auto chunk_pos = pos / MChunk.size;
+                IVec3 block_pos = pos + face;
+                world[block_pos.array] = Voxel(Color4b.BLUE.to_hex);
+
+                // TODO: Gotta make a class or type to handle global positions
+                auto chunk_pos = IVec3((Vec3(block_pos) / cast(float)MChunk.size).floor);
                 auto chunk = chunk_pos.array in world.chunk_map ;
                 gstate.renderer.commit_chunk(*chunk, chunk_pos);
+                gstate.renderer.send_to_device();
+
+                writeln("setting block in block_pos: ", block_pos, " at chunk: ", chunk_pos);
+                /* assert(world[block_pos.array] == Voxel(Color4b.BLUE.to_hex)); */
+                break;
             }
 
-            if (dist >= MAX_DISTANCE)
-                break;
+            if (dist >= MAX_DISTANCE) break;
         }
     }
 }

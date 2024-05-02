@@ -16,7 +16,9 @@ class World(ChunkT) : VoxelWorld!ChunkT
 
     VoxelT set_voxel(int[3] pos, VoxelT voxel)
     {
-        IVec3 chunk_pos = IVec3((Vec3(pos.vec()) / cast(float)ChunkT.size).floor);
+        IVec3 chunk_pos = IVec3(
+                (Vec3(pos.vec()) / cast(float)ChunkT.size).floor
+        );
         /* IVec3 rel_pos = pos.vec() % ChunkT.size; */
         IVec3 rel_pos = ((pos.vec() % ChunkT.size) + ChunkT.size) % ChunkT.size;
         if (ChunkT* chunk = chunk_pos.array in this.chunk_map) {
@@ -31,7 +33,7 @@ class World(ChunkT) : VoxelWorld!ChunkT
 
     Optional!VoxelT get_voxel(int[3] pos) const
     {
-        IVec3 chunk_pos = pos.vec() / ChunkT.size;
+        IVec3 chunk_pos = IVec3((Vec3(pos.vec()) / cast(float)ChunkT.size).floor);
         /* IVec3 rel_pos = pos.vec() % ChunkT.size; */
         IVec3 rel_pos = ((pos.vec() % ChunkT.size) + ChunkT.size) % ChunkT.size;
 
