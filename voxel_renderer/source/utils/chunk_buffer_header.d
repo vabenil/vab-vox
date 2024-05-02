@@ -319,6 +319,9 @@ struct ChunkBufferHeader
     /// Free chunk
     void chunk_free(int header_id)
     {
+        if (header_id == -1)
+            return;
+
         static foreach (buff_id; 0..BC) {
             chunk_buffer_free(header_id, buff_id);
         }
