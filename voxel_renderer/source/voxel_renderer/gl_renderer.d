@@ -278,15 +278,18 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
             foreach (buff; CPU_BUFFERS) {
                 Buffer gpu_buff = buff.parallel_buffer();
                 ChunkMemBlock cpu_mem_block = header.mem_blocks[buff]; // [WIP]
+                ChunkMemBlock* gpu_mem_block = &header.mem_blocks[gpu_buff];
 
-                if (!(cpu_mem_block.state & MeshState.ON_DEVICE))
-                    continue;
+
+                if (cpu_mem_block.state == MeshState.NONE || gpu_mem_block.state & MeshState.SYNCHED)
+                    continue; // nothing to do
 
                 this.mesh_container.buffer_header.chunk_buffer_transfer(header_id, gpu_buff, buff);
 
-                // Get the gpu memblock which should be allocated at this point
-                ChunkMemBlock gpu_mem_block = header.mem_blocks[gpu_buff];
+                /* if (gpu_mem_block.state & MeshState.SYNCHED) */
+                /*     continue; // Data already on GPU */
 
+                // Get the gpu memblock which should be allocated at this point
                 assert(gpu_mem_block.is_valid());
 
                 debug writeln(cpu_mem_block);
@@ -391,6 +394,10 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
     void create_chunk_mesh(ref const ChunkT chunk, ivec3 cpos)
     {
         import std.range    : zip;
+        // Ok, we are remeshing anyway so we might as well free
+        // NOTE: This not optimal, as i *MAY* need to only reallocate a single buffer
+        // so freeing them al *MAY* be throwing away work
+
         // Allocate buffers and return ptr, if buffers are already allocated just return ptr
         VoxelVertex* bf_buffer = mesh_container.chunk_buffer_allocate(cpos, Buffer.CPU_BACK_FACE, MAX_FACE_COUNT);
         VoxelVertex* ff_buffer = mesh_container.chunk_buffer_allocate(cpos, Buffer.CPU_FRONT_FACE, MAX_FACE_COUNT);
@@ -423,6 +430,8 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
             writeln("face_count: ", face_count);
             // Resize down the buffers
             mesh_container.chunk_buffer_reallocate(cpos, buffer_id, face_count);
+            // Free from GPU since it's no longer up to date
+            mesh_container.buffer_header.chunk_buffer_free(cpos.array, buffer_id.parallel_buffer());
         }
     }
 
