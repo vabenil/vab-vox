@@ -1,3 +1,5 @@
+module window;
+
 import bindbc.sdl;
 import bindbc.opengl;
 
@@ -61,6 +63,10 @@ private GLSupport to_glsupport(GLVersion _version)
     }
 }
 
+
+/++
+    Simple wrapper over an SDL Window
+ +/
 struct Window
 {
     enum Flag : uint

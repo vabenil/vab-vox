@@ -20,6 +20,18 @@
 - [LOW IMPORTANCE] Maybe use sdl2 wrapper in the future
 
 ## NOTES:
+- For now re-meshing even when on small changes feels like to much work. I wanna
+    make it so instead there's a way to remove and add faces into the chunk_mesh
+    directly. This should be much faster. Additionally it would be great if the
+    `source/world.d` can also store many `VoxelWorld`s. It be great if I can
+    also store a `BinaryVoxelWorld` were visible (non-trasnparent) voxels are 1
+    and everything else is 0. It would likely speed-up pretty much anything
+    allowing me to easily iterate past non-visible voxels.
+- Figuring out LOD would also be cool, for this I guess I will need to store
+    multiple `ChunkHeaders` perhaps multiple `ChunkBufferHeader`. One for each
+    LOD level I want. Perhaps I would also need some sort of time-stamp to know
+    what is most up-to-date, since some of this buffers may be more up-to-date
+    than others
 - Read about brokering servers (the better peer-to-peer)
 
 ## Old TODO

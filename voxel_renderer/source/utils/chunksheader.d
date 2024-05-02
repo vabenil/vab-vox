@@ -1,241 +1,160 @@
 module utils.chunksheader;
 
-import std.meta : AliasSeq, staticMap;
+import std.algorithm    : among;
 
-template mirrorMembers(T1, T2)
+
+enum MeshState : int
 {
-    template mirrorMember(alias member)
-    {
-        alias mirrorMember = mixin("T1."~member.stringof);
-    }
-
-    alias mirrorMembers = staticMap!(mirrorMember, T2.tupleof);
+    /++ There's no mesh in device ++/
+    NONE        = 0,
+    /++ Mesh is on device ++/
+    ON_DEVICE   = 1,
+    /++ Mesh is up to date in device ++/
+    SYNCHED     = 3
 }
 
-// Likely faster to copy than reference
-@safe @nogc nothrow
-bool pos_equals(int[3] v0, int[3] v1) pure
+alias ivec3 = int[3];
+
+bool equals(ivec3 a, ivec3 b)
+    => a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
+
+/++
+    Stores where a memory block starts and ends within a buffer and what state
+    the memory block is (NONE means the memory block is not valid)
+ +/
+struct ChunkMemBlock
 {
-    bool condition = true;
+    int buff_id = -1;
+    int start = -1;
+    int end = -1;
 
-    static foreach (i; 0..3) {
-        condition &= v0[i] == v1[i];
-    }
+    MeshState state = MeshState.NONE;
 
-    return condition;
+    /++
+        Retruns true if `this` memory block is valid
+     +/
+    bool is_valid() // As long as no field is -1. The  block should be valid
+        => !among(-1, this.buff_id, this.start, cast(int)this.state);
 }
 
-// Could call it ChunkHeader
-struct ChunkInfo
-{
-    int[3] coords;
-    int index;
-    int size;
-    bool modified;
-    bool queued;
+/++
+    Contains information of where the chunk meshes are located in both the
+    CPU and GPU. Does not contain any mesh data itself.
 
-    bool is_adjacent(ChunkInfo info)
-    {
-        return (
-            this.index == (info.index + info.size) || // adjacent to the right
-            (this.index + this.size) == info.index // Adja cent to the left
-        );
-    }
+    NOTES:
+        The chunk may store faces in multiple contigious buffer locations
+ +/
+struct ChunkHeader(int buffer_count)
+{
+    /++ The coordinates to the chunk ++/
+    ivec3 coords;
+
+    ChunkMemBlock[buffer_count] mem_blocks;
+
+    // Optionally I can add an argument to track whether this chunk
+    // Should be rendered later (Although I am not sure if that should be
+    // stored in here
 }
 
-struct ChunkRef
+/++
+    Store headers for chunks.
+
+    IDEAS:
+        A nice idea here is to sort chunk by dinstance to camera/player.
+        closer chunks are closest to array start.
+
+        This way linear search is faster at searching the most common chunks.
+
+        Also it will allow me to do binary search on ChunksHeader. Which to
+        be honest is probably all I need. A hashmap may be too much, binary
+        search fills just right.
+ +/
+struct ChunksHeader(int buff_count)
 {
-    private {
-        ChunksHeader* header = null;
-        int header_id = -1;
-    }
+    import std.container;
+    import std.typecons     : Tuple, tuple;
+    import std.algorithm    : map, countUntil, remove;
 
-    @disable this();
+    alias MChunkHeader = ChunkHeader!buff_count;
 
-    @safe @nogc nothrow
-    this(ChunksHeader* header, int header_id)
+    struct Range
     {
-        this.header = header;
-        this.header_id = header_id;
+        int index = 0;
+        Array!MChunkHeader* arr;
+
+        MChunkHeader front() => (*arr)[index];
+        bool empty() => index >= arr.length;
+        MChunkHeader opIndex(int i) => (*arr)[i];
+        void popFront() { index++; }
     }
 
-    void opAssign(ChunkInfo info)
+    struct IndexedRange
     {
-        static foreach (i, member; mirrorMembers!(ChunkRef, ChunkInfo)) {
-            member = info.tupleof[i];
-        }
+        int index = 0;
+        Array!MChunkHeader* arr;
+
+        Tuple!(int, MChunkHeader*) front() => tuple(index, &((*arr)[index]));
+
+        bool empty() => index >= arr.length;
+        MChunkHeader opIndex(int i) => (*arr)[i];
+        void popFront() { index++; }
     }
 
-    @property
-    ref inout(int[3]) coords() return inout => header.coords[header_id];
+    /++
+        NOTE:
+            No need to preserve indexing here. Chunks are accessed mostly by their postion
+     +/
+    Array!(MChunkHeader) headers;
 
-    @property
-    ref inout(int) index() return inout => header.indices[header_id];
+    /++ It's probably best not to rely on indices ++/
+    ref inout(MChunkHeader) opIndex(int i) return inout => headers[i];
 
-    @property
-    ref inout(int) size() return inout => header.sizes[header_id];
+    // Doesn't check if a chunk with the same cpos exist already
+    // Also maybe is best to just add by cpos. Anything a header
+    // is added it is most likely gonna empty any way
+    int push(MChunkHeader chunk_header)
+    {
+        headers.insertBack(chunk_header);
+        return cast(int)headers.length-1;
+    }
 
-    @property
-    ref inout(bool) modified() return inout => header.modified[header_id];
+    int find(ivec3 pos)
+        => cast(int)headers[].countUntil!(h => h.coords.equals(pos));
 
-    @property
-    ref inout(bool) queued() return inout => header.queued[header_id];
+    void remove(int index) { headers[].remove(index); }
 
-    ChunkInfo info() => ChunkInfo(this.coords, this.index, this.size, this.modified, this.queued);
+    // implement is_full
+    Range range() => Range(0, &headers);
+
+    IndexedRange indexed_range() => IndexedRange(0, &headers);
 }
 
-int end(T)(T chunk_info) if (is(T == ChunkInfo) || is(T == ChunkRef))
-    => chunk_info.index + chunk_info.size;
-
-
-struct ChunksHeaderRange
-{
-    int index = 0;
-    ChunksHeader* header;
-
-    @disable this();
-
-    this(ref ChunksHeader header) { this.header = &header; }
-
-    bool empty() const => (index >= header.length);
-
-    ChunkRef front() => (*header)[index];
-
-    void popFront() { index++; }
-
-    @safe nothrow
-    ChunkRef opIndex(int index) return => ChunkRef(header, index);
-
-    ChunksHeaderRange save() => this;
-}
-
-struct ChunksHeader
-{
-    //------ ALL HERE IS @safe nothrow
-
-    enum int NULL_ID = -1;
-
-    int count = 0;
-    int cap = 0;
-
-    int[3][] coords;
-    int[] indices;
-    int[] sizes;
-    bool[] modified;
-    bool[] queued; // queued for rendering
-
-    @property @safe @nogc nothrow
-    int length() const pure => this.count;
-
-    @safe nothrow
-    bool is_full() const pure => this.count >= this.cap;
-
-    @safe nothrow
-    int unused() const pure => this.cap - this.count;
-
-    alias this = range;
-
-    @disable this(); // NO DEFAULT CONSTRUCTOR ALLOWED
-
-    this(int size)
-    {
-        this.cap = size;
-
-        this.coords = new int[3][](size);
-        this.indices = new int[](size);
-        this.sizes = new int[](size);
-
-        // TODO: This 2 fields prob better to make into their own list of shit
-        // Also. I should really add a sub-chunksheader that allocates a big
-        // block inside main header. Might be a bit complex though
-        this.modified = new bool[](size);
-        this.queued = new bool[](size);
-    }
-
-    // Shit is not sorted
-    @safe nothrow
-    int append(ChunkInfo info)
-    {
-        if (this.count >= cap)
-            return -1;
-
-        this.coords[this.count] = info.coords;
-        this.indices[this.count] = info.index;
-        this.sizes[this.count] = info.size;
-        this.modified[this.count] = info.modified;
-        this.queued[this.count] = info.queued;
-
-        return this.count++;
-    }
-
-    @safe nothrow
-    int find(int[3] pos)
-    {
-        import std.algorithm    : countUntil;
-
-        return cast(int)this.coords[0..count].countUntil(pos);
-    }
-
-    @safe nothrow
-    void remove(int index) in (index >=0 && index < this.count)
-    {
-        import std.algorithm    : remove;
-
-        static foreach (member; AliasSeq!(coords, indices, sizes, modified))
-            member.remove(index);
-
-        this.count--;
-    }
-
-    @safe @nogc nothrow
-    void clear() pure { this.count = 0; }
-
-    // NOTE: This probably needs to be `scope` for me to be able to store
-    // the result of this function a variable
-    @safe nothrow
-    ChunkRef opIndex(int index) return => ChunkRef(&this, index);
-
-    // Return range
-    private ChunksHeaderRange range() return => ChunksHeaderRange(this);
-
-    // Return range
-    ChunksHeaderRange opIndex() return => range();
-
-    /* int opApply(T)(T ops) if (is(T : int delegate(ref ChunkRef))) */
-    /* { */
-    /*     int result = 0; */
-    /*     for (int i = 0; i < this.count; i++) { */
-    /*         ChunkRef chunk_ref = this[i]; // So that I can get a reference */
-    /*         result = ops(chunk_ref); */
-    /*         if (result) */
-    /*             return result; */
-    /*     } */
-    /*     return result; */
-    /* } */
-}
-
-// test shit
 unittest
 {
-    // TODO: Include negative asserts
-    // Do more tests, this just kinda tests basic functionality, better than
-    // Nothing but not good enough
+    import std.algorithm    : canFind;
     import std.stdio;
 
-    ChunkInfo[] infos = [
-        ChunkInfo([0, 0, 0], 0, 10), ChunkInfo([1, 0, 0], 10, 4),
-        ChunkInfo([2, 0, 0], 14, 6), ChunkInfo([3, 0, 0], 20, 5),
-        ChunkInfo([4, 0, 0], 25, 5), ChunkInfo([5, 0, 0], 30, 10),
+    alias DBChunkHeader = ChunkHeader!2;
+    alias DBChunksHeader = ChunksHeader!2;
+
+    DBChunkHeader[] chunk_headers = [
+        DBChunkHeader([0, 0, 0]),
+        DBChunkHeader([1, 0, 0]),
+        DBChunkHeader([0, 1, 0]),
+        DBChunkHeader([0, 0, 1])
     ];
-    ChunksHeader header = ChunksHeader(16);
-    foreach (info; infos)
-        header.append(info);
 
-    foreach (info; infos)
-        assert(header[header.find(info.coords)].index == info.index);
+    DBChunksHeader chunks_header;
 
-    foreach (info; infos)
-        header.remove(header.find(info.coords));
+    foreach (chunk_header; chunk_headers)
+        // TODO: Maybe test that returned index is what I expect
+        chunks_header.push(chunk_header);
 
-    assert(header.count == 0);
+    // test that push & and find works
+    foreach (chunk_header; chunk_headers)
+        assert(chunks_header.find(chunk_header.coords) >= 0);
+
+    chunks_header.remove(chunks_header.find(chunk_headers[0].coords));
+
+    assert(chunks_header.find(chunk_headers[0].coords) == -1);
 }
