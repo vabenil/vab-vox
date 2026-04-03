@@ -1,3 +1,5 @@
+Honestly this are more notes than a TODO list
+
 ## TODO:
 - [PRIORITY]: Organize this damned code base, it's a mess.
 - [PRIORITY]: Set up pipeline
@@ -33,6 +35,9 @@
     what is most up-to-date, since some of this buffers may be more up-to-date
     than others
 - Read about brokering servers (the better peer-to-peer)
+- Right now convertions are a mess. I convert from `common.types` "`vector`" to
+  `T[]`. I should just choose on one of this types to use or set rules on where
+  to use what.
 
 ## Old TODO
 - Creating fucking client

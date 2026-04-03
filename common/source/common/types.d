@@ -1,6 +1,7 @@
 module common.types;
 
 private import std.traits       : isNumeric, isFloatingPoint, CommonType;
+private import std.meta         : Repeat;
 private import std.format       : format;
 private import std.algorithm    : among;
 private import std.math         : floor_ = floor, sqrt;
@@ -14,16 +15,6 @@ alias ivec4 = Vector!(int, 4);
 
 private T min(T)(T a, T b) pure => a < b ? a : b;
 
-private template isSameType(Args...)
-{
-    static if (Args.length <= 1)
-        static immutable bool isSameType = true;
-    else static if (is(Args[0] == Args[1]))
-        static immutable bool isSameType = isSameType!(Args[1..$]);
-    else
-        static immutable bool isSameType = false;
-}
-
 enum isVector(T) = is(T : Vector!(BT, N), BT, ulong N);
 
 static assert(isVector!vec3);
@@ -32,14 +23,12 @@ struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
 {
     alias This = Vector!(BT, N);
     alias BaseType = BT;
+    /// Type tuple. For example:
+    /// if Vector!(int,  3) VecArgs will be (int, int, int)
+    alias VecArgs = Repeat!(N, BT);
     enum ulong dimensions = N;
 
     enum string[] symbols = ["x", "y", "z", "w"];
-
-    private enum bool validateArgs(Args...) =
-        Args.length == N &&
-        is(Args[0] : BT) && // can be explicitly converted to BT
-        isSameType!Args;
 
     BT[N] array;
 
@@ -53,7 +42,7 @@ struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
         this.array[] = arr;
     }
 
-    this(Args...)(Args args) if (validateArgs!Args)
+    this(VecArgs args)
     {
         this.array = [args];
     }
@@ -150,6 +139,10 @@ struct Vector(BT, ulong N) if (isNumeric!BT && N <= 4)
         result.array = mixin("this.array[] "~op~" scalar");
         return result;
     }
+
+    This opOpAssign(string op)(This v) => this = mixin("this "~op~" v");
+
+    This opOpAssign(string op)(BT scalar) => this = mixin("this "~op~" scalar");
 
     pure
     {

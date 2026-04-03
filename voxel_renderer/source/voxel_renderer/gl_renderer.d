@@ -39,7 +39,7 @@ private enum int[3][3] mat3_identity = [
 ];
 
 enum ulong MAG  = 5;
-alias BitChunk = VoxelBitChunk!(BitVoxel, MAG);
+/* alias BitChunk = VoxelBitChunk!(BitVoxel, MAG); */
 
 // SIZE of the chunk header / maximum count of chunks to hold in gpu for perm
 // storage
@@ -74,6 +74,8 @@ alias ChunkHeader = ChunkHeader_!BUFFER_COUNT;
 alias ChunksHeader = ChunksHeader_!BUFFER_COUNT;
 
 /++
+TODO: Move this into it's own "mesh_container" module
+
 Manages vertex data and stores where memory of each chunk is located in
 the buffer
 +/
@@ -106,8 +108,7 @@ struct MeshContainer
     // Count, is the count of chunks for which it's chunk buffer will be stored
     this(uint count) in (count > 0)
     {
-        import std.conv : text;
-        this.max_face_count = count / 2 * MAX_FACE_COUNT;
+        this.max_face_count = (count / 2) * MAX_FACE_COUNT;
 
         // TODO: For now if the cpu buffer size is not the same as gpu
         // there will be problem. Remmeber to implement freeing chunks from the cpu
@@ -164,7 +165,7 @@ struct MeshContainer
         Arguments:
         $(LIST
                 * cpos - The position of the chunk
-                * buffer_id - id to buffer. Must be either BufferCPU_BACK_FACE
+                * buffer_id - id to buffer. Must be either Buffer.CPU_BACK_FACE
                 or Buffer.CPU_FRONT_FACE
                 * size - The size to allocate (1 unit = 1 VoxelVertex)
          )
@@ -176,6 +177,9 @@ struct MeshContainer
     in (buffer_id.device() == Device.CPU)
     {
         assert(buffer_id != -1);
+        writefln("chunk_buffer_allocate(cpos: %s, buffer_id: %s, size: %s)",
+                cpos, cast(Buffer)buffer_id, size);
+
         int header_id = this.buffer_header.chunk_allocate_buffer(cpos.array, buffer_id, size);
 
         if (header_id == -1)
@@ -211,30 +215,40 @@ struct MeshContainer
     auto get_all_indexed_chunk_headers() => this.buffer_header.get_indexed_chunk_headers();
 }
 
+
 class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
 {
+    import common.camera;
+
     alias VoxelT = ChunkT.VoxelType;
 
     MeshContainer mesh_container;
     private GLDevice device;
+    private ivec3[] chunk_draw_queue;
 
-    this(GLDevice device)
+    Camera camera;
+
+    // TODO: Take camera struct here instead
+    this()
     {
-        this.device = device;
-        this.mesh_container = MeshContainer(10);
+        this.device = new GLDevice();
+        this.mesh_container = MeshContainer(128);
     }
 
     public GLDevice get_device() => device;
 
-    void device_init() { allocate_buffers(); }
+    void device_init()
+    {
+        device.device_init(camera.width, camera.height);
+        allocate_buffers();
+    }
 
-    void set_camera(vec3 pos, vec3 dir, vec3 up) {}
+    void set_camera(Camera camera) { this.camera = camera; }
 
     void allocate_buffers()
     {
         debug {
-            writeln("allocate gpu buffer with ",
-                    mesh_container.max_face_count * 2, " vertices");
+            writeln("allocate gpu buffer with ", mesh_container.max_face_count * 2, " vertices");
         }
         device.allocate_main_buffer(mesh_container.max_face_count * 2 * VoxelVertex.sizeof);
     }
@@ -269,7 +283,13 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
     // TODO: Make a proper render queue, with rendering commands,
     // for rendering chunks in batches
     /// Queue chunk for rendering may, or may not create a mesh
-    void queue_chunk(ref ChunkT chunk, ivec3 cpos) { }
+    void queue_chunk(ref ChunkT chunk, ivec3 cpos)
+    {
+        // TODO: First check if the chunk in cpos is already meshed, otherwise,
+        // mesh it. Or who knows perhaps queue it for meshing and then render it
+        // next frame
+        chunk_draw_queue ~= cpos;
+    }
 
     void send_to_device()
     {
@@ -307,6 +327,13 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
 
     void render()
     {
+        import common.types;
+        import vadgl;
+
+        this.device.get_program().use().throw_on_error();
+        this.device.set_camera_pos(camera.pos.vector.vec());
+        this.device.set_mpv_matrix(camera.mpv(), true);
+
         render_indirect_header();
         // Render main buffer
         /* render_header(this.mesh_container.chunks_header); */
@@ -382,7 +409,7 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
     }
 
     // Render multiple chunks
-    void render_chunks(ivec3[] chunk_positions, VoxelWorld!ChunkT world) { }
+    void render_chunks(ivec3[] chunk_positions) { }
 
     /++
         Creates meshes in `CPU_BACK_FACE` and `CPU_FRONT_FACE` buffers,
@@ -414,8 +441,7 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
 
             debug {
                 auto mem_block =
-                    mesh_container.buffer_header
-                        .chunk_get_buffer_mem_block(cpos.array, buffer_id);
+                    mesh_container.buffer_header.chunk_get_buffer_mem_block(cpos.array, buffer_id);
                 writeln("allocated cpu mem_block ", *mem_block);
             }
 
@@ -493,16 +519,42 @@ class GLVoxelRenderer(ChunkT) : VoxelRenderer!ChunkT
         import std.array        : array;
         import std.range        : chain;
         import std.algorithm    : filter, map;
+        import std.stdio;
 
-        auto draw_commands = create_indirect_draw_commands();
-        int[4][] chunk_coords = this.mesh_container.get_all_chunk_headers()
-            .map!(header => ivec4(header.coords[0], header.coords[1], header.coords[2], 0).array).array();
+        /* auto draw_commands = create_indirect_draw_commands(); */
+        /* int[4][] chunk_coords = this.mesh_container.get_all_chunk_headers() */
+        /*     .map!(header => ivec4(header.coords[0], header.coords[1], header.coords[2], 0).array).array(); */
+        int[4][] chunk_coords = this.chunk_draw_queue.map!(
+                pos => ivec4(pos[0], pos[1], pos[2], 0).array
+        ).array();
+
+        // TODO: Put this into a function
+        DrawElementsIndirectCommand[] draw_commands = [];
+        foreach (pos; this.chunk_draw_queue) {
+            int offset;
+            ChunkHeader* header = mesh_container.buffer_header.chunk_get_header(pos.array);
+            foreach (buffer_id; GPU_BUFFERS) {
+                offset = mesh_container.buffer_offsets[buffer_id];
+
+                draw_commands ~=
+                    DrawElementsIndirectCommand(
+                        count: 6,
+                        instance_count: header.mem_blocks[buffer_id].calc_size(),
+                        index: 0,
+                        base_vertex: 0,
+                        base_instance: offset + header.mem_blocks[buffer_id].start
+                    );
+            }
+        }
+        /* writeln(this.draw_command_queue); */
 
         /* import std.stdio; */
         this.device.send_chunk_coords(chunk_coords);
         this.device.set_chunk_count(cast(int)chunk_coords.length);
         this.device.set_chunk_size(ChunkT.size);
         this.device.multi_render_indirect(draw_commands);
+
+        /* this.chunk_draw_queue.length = 0; */
     }
 
     /* ChunkRef[][] create_chunk_batches() */

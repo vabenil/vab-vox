@@ -4,17 +4,10 @@
     "#versions": ["VADGL_DebugGLCalls"],
     "versions": ["GL_46"],
 
-    "configurations": [
-        {
-            "name": "unittest",
-            "dependencies": {
-                "inmath": "~>1.0.5"
-            }
-        }
-    ],
     "dependencies": {
         "bindbc-opengl": "~>1.1.0",
 
+        "mrenderer": { "path": "../mrenderer" },
         "common": { "path": "../common" },
         "voxel_grid": { "path": "../voxel_grid" },
         "vadgl": { "path": "../vadgl" }

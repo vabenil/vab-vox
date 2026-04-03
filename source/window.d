@@ -88,7 +88,7 @@ struct Window
         FOREIGN             = SDL_WINDOW_FOREIGN,
     }
 
-    alias Flag this;
+    /* alias Flag this; */
 
     // set to true if sdl and opengl where already manually loaded
     static bool sdl_loaded = false;

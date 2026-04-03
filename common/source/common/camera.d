@@ -1,4 +1,4 @@
-module camera;
+module common.camera;
 
 import inmath;
 import inmath.math;
@@ -56,8 +56,6 @@ struct Camera
     mat4 view;
     mat4 proj;
 
-    mat4 proj_view;
-
     float pitch = 0;
     float yaw = 0;
     float roll = 0;
@@ -99,10 +97,7 @@ struct Camera
 
     void look_at() { this.look_at(this.izpos + this.direction()); }
 
-    void look_at(vec3 front)
-    {
-        this.view = mat4.lookAt(this.izpos, front, UP);
-    }
+    void look_at(vec3 front) { this.view = mat4.lookAt(this.izpos, front, UP); }
 
     // Create projection matrix
     void set_dimensions(int w, int h, float near=0.1f, float far=256.0f)
@@ -114,9 +109,4 @@ struct Camera
     }
 
     mat4 mpv() pure const => proj * view * model;
-    /* mat4 mpv() pure const => proj * model * view; */
-    /* mat4 mpv() pure const => view * model * proj; */
-    /* mat4 mpv() pure const => model * proj * view; */
-    /* mat4 mpv() pure const => proj * (view * model); */
-    /* mat4 mpv() pure const => (proj * view) * model; */
 }

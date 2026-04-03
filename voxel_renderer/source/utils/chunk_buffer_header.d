@@ -180,7 +180,7 @@ struct ChunkBufferHeader
             // Just allocate the damn memory
             mem_start = this.mem_headers[buffer_id].allocate(capacity);
         }
-        assert(mem_start != -1);
+        assert(mem_start != -1, "Failed to allocate more memory");
 
         mem_block.start = mem_start;
         mem_block.end = mem_start + capacity;

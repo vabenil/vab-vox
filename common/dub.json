@@ -1,4 +1,8 @@
 {
     "name": "common",
-    "targetType": "library"
+    "targetType": "library",
+
+    "dependencies": {
+        "inmath": "~>1.0.5"
+    }
 }

@@ -57,6 +57,9 @@ struct MemHeader
     /*
        TODO: If I want this shit to be `@nogc` I need to use `std.container.array`
        or use my own implementation
+
+       TODO: Ok, so now I have a capped array. I can still use std.container.array
+       or use CapedArray
    */
     private MemRange[] mem_blocks;
 

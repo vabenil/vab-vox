@@ -77,6 +77,7 @@ struct ChunksHeader(int buff_count)
 
     alias MChunkHeader = ChunkHeader!buff_count;
 
+    // This makes sense really, I can just use Array default opSlice which returns Range
     struct Range
     {
         int index = 0;

@@ -1,16 +1,16 @@
 module utils.capedarray;
+import std.range;
 
 // Basically an array with a costant capacity and dynamic length
-struct CapedArray(ElementType, uint capacity)
+struct CapedArray(E, uint capacity)
 {
     // All of this is @safe and @nogc as long
-    // as `ElementType` copy constructor is @safe and @nogc
+    // as `E` copy constructor is @safe and @nogc
 
-    alias E = ElementType;
     // Makes no sense to make an array with that's more than 4 gb
     // for that just use a dynamic array
 
-    // Not private but shouldn't be modified unless you know what you are doing
+    /// Not private but shouldn't be modified unless you know what you are doing
     uint _length = 0;
 
     E[capacity] array = void;
@@ -36,6 +36,17 @@ struct CapedArray(ElementType, uint capacity)
     }
 
     @safe @nogc nothrow
+    this(R)(R range) if (isForwardRange!R && is(E == ElementType!R))
+    {
+        foreach (e; range) {
+            if (_length >= capacity) return;
+            this.array[_length++] = e;
+        }
+    }
+
+    // TODO: I should create a constructor for a range
+
+    @safe @nogc nothrow
     void clear() { this._length = 0; }
 
     int find(E value)
@@ -57,11 +68,13 @@ struct CapedArray(ElementType, uint capacity)
         return true;
     }
 
-    // GC because of idup
     @safe @nogc nothrow
     bool insert(E value, int index) in (index >= 0)
     {
         if (_length == capacity) return false;
+
+        // NOTE: I coulda make a memcopy here, though, honestly,
+        // I am pretty sure the compiler can optimize this
 
         // Shift values after index 1 to the right
         for (int j = _length; j > index; j--)
@@ -70,6 +83,16 @@ struct CapedArray(ElementType, uint capacity)
         this.array[index] = value;
         this._length++;
         return true;
+    }
+
+    void remove(int index) in (index > 0)
+    {
+        // Shift values after index to the left
+        for (int j = index+1; j < _length; j++) {
+            this.array[j-1] = this.arrays[j];
+        }
+
+        this._length--;
     }
 
     @safe @nogc nothrow

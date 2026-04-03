@@ -4,12 +4,14 @@ import voxel_renderer.device;
 import voxel_grid;
 import voxel_grid.bitchunk;
 
+import mrenderer;
+
 import common   : ivec3, vec3;
 
 static immutable size_t chunk_M = 5;
 private alias BitChunk = VoxelBitChunk!(BitVoxel, chunk_M);
 
-interface VoxelRenderer(ChunkT)
+interface VoxelRenderer(ChunkT) : MRenderer
 {
     alias VoxelT = ChunkT.VoxelType;
 
@@ -18,7 +20,7 @@ interface VoxelRenderer(ChunkT)
     // TODO: Maybe add config as input argument
     void device_init();
 
-    void set_camera(vec3 pos, vec3 dir, vec3 up);
+    /* void set_camera(vec3 pos, vec3 dir, vec3 up); */
 
     void load_chunk(ref const(ChunkT) chunk, ivec3 chunk_pos);
 

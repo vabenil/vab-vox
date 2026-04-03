@@ -61,13 +61,8 @@ struct Packed
 struct DrawChunkCommand
 {
     int[3] chunk_pos;
-    int index;
-    int size;
-}
-
-struct DrawChunkBatchCommand
-{
-
+    int start_index;
+    int vertex_count;
 }
 
 struct DrawElementsIndirectCommand
@@ -106,6 +101,46 @@ private void default_create_program(GLDevice device)
     device.program.use().throw_on_error();
 }
 
+private void initialize_frame_buffer(GLDevice dev)
+{
+    // Frame buffer
+    gl_wrap!glGenFramebuffers(1, &dev.frame_buffer).throw_on_error();
+    gl_wrap!glBindFramebuffer(GL_FRAMEBUFFER, dev.frame_buffer).throw_on_error();
+    {
+        // Color texture
+        gl_wrap!glGenTextures(1, &dev.color_texture).throw_on_error();
+        gl_wrap!glBindTexture(GL_TEXTURE_2D, dev.color_texture).throw_on_error();
+        gl_wrap!glTexImage2D(
+                GL_TEXTURE_2D, 0, GL_RGB,
+                dev.frame_width, dev.frame_height, 0,
+                GL_RGB, GL_UNSIGNED_BYTE, null).throw_on_error();
+        gl_wrap!glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST).throw_on_error();
+        gl_wrap!glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST).throw_on_error();
+        gl_wrap!glFramebufferTexture2D(
+                GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dev.color_texture, 0).throw_on_error();
+
+        // Depth texture
+        gl_wrap!glGenTextures(1, &dev.depth_texture).throw_on_error();
+        gl_wrap!glBindTexture(GL_TEXTURE_2D, dev.depth_texture).throw_on_error();
+        gl_wrap!glTexImage2D(
+                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+                dev.frame_width, dev.frame_height, 0,
+                GL_DEPTH_COMPONENT, GL_FLOAT, null).throw_on_error();
+        gl_wrap!glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST).throw_on_error();
+        gl_wrap!glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST).throw_on_error();
+        /// I don't really understand GL_TEXTURE_WRAP{S|T}
+        gl_wrap!glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE).throw_on_error();
+        gl_wrap!glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE).throw_on_error();
+        gl_wrap!glFramebufferTexture2D(
+                GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                GL_TEXTURE_2D, dev.depth_texture, 0).throw_on_error();
+
+        assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    }
+    gl_wrap!glBindFramebuffer(GL_FRAMEBUFFER, 0).throw_on_error();
+    gl_wrap!glBindTexture(GL_TEXTURE_2D, 0).throw_on_error();
+}
+
 private void default_initialize_buffers(GLDevice dev)
 {
     static immutable int[8] QUAD_MODEL = [
@@ -125,6 +160,8 @@ private void default_initialize_buffers(GLDevice dev)
     dev.ibo = VBufferObject.create(GL_DRAW_INDIRECT_BUFFER).throw_on_error();
     dev.ebo = VBufferObject.create(GL_ELEMENT_ARRAY_BUFFER).throw_on_error();
     dev.model_vbo = VBufferObject.create().throw_on_error();
+
+    initialize_frame_buffer(dev);
 
     dev.ubo.bind().throw_on_error();
     // Remember to realloc buffer if necessary
@@ -245,9 +282,11 @@ private void default_initialize_attributes(GLDevice dev)
 class GLDevice : VoxelDevice
 {
     // This uses GC. Dont use GC
-    void[] buffer;
     private {
         ulong face_count = 0;
+
+        uint frame_width;
+        uint frame_height;
 
         VArrayObject vao;
         // TODO: We might need another vbo for far objects;
@@ -271,6 +310,10 @@ class GLDevice : VoxelDevice
         GLUniform[string] uniforms;
         GLAttributeInfo[string] attributes;
 
+        uint frame_buffer;
+        uint color_texture;
+        uint depth_texture;
+
         Program program;
 
         void function(GLDevice) create_program = &default_create_program;
@@ -278,6 +321,11 @@ class GLDevice : VoxelDevice
         void function(GLDevice) initialize_uniforms = &default_initialize_uniforms;
         void function(GLDevice) initialize_attributes = &default_initialize_attributes;
     }
+
+    Program get_program() => program;
+
+    uint get_depth_texture() => this.depth_texture;
+    uint get_color_texture() => this.color_texture;
 
     // TODO: I Prob got to normalize it
     void set_mpv_matrix(const(float[16]) mat, bool normalize=false)
@@ -293,7 +341,7 @@ class GLDevice : VoxelDevice
     }
 
     void set_camera_pos(vec3 cam_pos)
-        => uniforms["u_chunk_count"].set_v(cam_pos.array).throw_on_error();
+        => uniforms["u_chunk_count"].set_v(cam_pos.array).throw_on_error(); // NOT CAMERA POS
 
     void set_chunk_count(int chunk_count)
         => uniforms["u_chunk_count"].set(chunk_count).throw_on_error();
@@ -312,10 +360,13 @@ class GLDevice : VoxelDevice
     }
 
     // This function can throw
-    void device_init()
+    void device_init(int width, int height)
     {
         import std.stdio;
         writeln("device_init()");
+
+        this.frame_width = width;
+        this.frame_height = height;
 
         create_program(this);
 
@@ -367,13 +418,6 @@ class GLDevice : VoxelDevice
     void send_to_main_buffer(long offset, const(void[]) data)
         => send_to_main_buffer(offset, data.length, data.ptr);
 
-    void send_to_tmp_buffer(long size)
-    {
-        vbo.bind().throw_on_error();
-        vbo.set_data(size, null, GL_STATIC_DRAW).throw_on_error();
-        vbo.disable();
-    }
-
     void send_to_device(void[] buff) // Send and allocate shit
     {
         vbo.bind().throw_on_error();
@@ -389,14 +433,6 @@ class GLDevice : VoxelDevice
         ibo.set_sub_data(0, command_buffer).throw_on_error();
         /* ibo.disable(); */
     }
-
-    /*
-        TODO: Probably best idea is to make a big buffer to store
-        meshes for multiple buffers and then draw slices of the buffer
-   */
-    void send_to_device() => this.send_to_device(this.buffer);
-
-    void clear_buffer() { this.buffer.length = 0; }
     // TODO: Perhaps add a way to clear the buffer
 
     /* NOTE: This coule be used to render multiple chunks more efficiently
@@ -474,6 +510,7 @@ class GLDevice : VoxelDevice
     }
 
     void render(uint count) => render(0u, count);
+
 
     void render() { this.render(cast(int)this.face_count); }
 }

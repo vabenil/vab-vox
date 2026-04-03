@@ -2,7 +2,6 @@
     This is simply a demo for the voxel renderer. Mostly to check that everything
     is working well
 ++/
-
 import std.stdio;
 
 import bindbc.sdl;
@@ -10,20 +9,25 @@ import bindbc.opengl;
 
 import inmath;
 
-import camera;
 import window;
 import sdl_ehandler;
 import world;
 
 import common.color;
 import common.types     : Vec3 = vec3, IVec3 = ivec3, vec;
+import common.coord;
+import common.camera;
+
 import voxel_grid.chunk;
 import voxel_grid.voxel;
 
 import voxel_renderer.gl_renderer;
 import voxel_renderer.gl_device;
 
-/+ NOTE: smaller chunks mean less chunks, less chunks increases performance
+import mrenderer;
+import mui_renderer;
+
+/+ NOTE: bigger chunks mean less chunks, less chunks increases performance
     This is probably mostly because of the number of render calls. Could be
     mitageted by rendering chunks in batches
 +/
@@ -49,7 +53,10 @@ struct GState
 
     Camera camera;
     Window win;
+
     GLVoxelRenderer!MChunk renderer;
+    MRenderPipeline render_pipeline;
+
     World!MChunk world;
 }
 
@@ -68,9 +75,7 @@ bool should_grab_window()
 }
 
 bool should_grab_mouse()
-{
-    return gstate.win_state.focused && gstate.win_state.grab_mouse;
-}
+    => gstate.win_state.focused && gstate.win_state.grab_mouse;
 
 void on_mouse_move(SDL_Event *e)
 {
@@ -102,6 +107,8 @@ void on_mouse_click(SDL_Event *e)
 
         Ray ray = Ray(camera.pos.vector.vec(), direction);
 
+        // It makes sense that pos here is a relative position.
+        // Here it would be best if I use position relative to chunk
         foreach (float dist, IVec3 pos, IVec3 face; ray.raymarch()) {
             if (!world[pos.array].is_empty()) {
                 writeln("Collision at ", pos, " - face: ", face);
@@ -115,7 +122,7 @@ void on_mouse_click(SDL_Event *e)
                 gstate.renderer.commit_chunk(*chunk, chunk_pos);
                 gstate.renderer.send_to_device();
 
-                writeln("setting block in block_pos: ", block_pos, " at chunk: ", chunk_pos);
+                /* writeln("setting block in block_pos: ", block_pos, " at chunk: ", chunk_pos); */
                 /* assert(world[block_pos.array] == Voxel(Color4b.BLUE.to_hex)); */
                 break;
             }
@@ -208,16 +215,17 @@ void init_globals()
 
     gstate.world = new World!MChunk();
 
-    for (int j = 0; j < 256; j++)
-    for (int i = 0; i < 256; i++)
-        gstate.world.set_voxel([j-128, 0, i-128], Voxel(Color4b.WHITE.to_hex));
+    /* for (int j = 0; j < 256; j++) */
+    /* for (int i = 0; i < 256; i++) */
+    /*     gstate.world.set_voxel([j-64, 0, i-64], Voxel(Color4b.WHITE.to_hex)); */
+
     /* gstate.world.load_from_vox_file("./res/assets/SmallBuilding01.vox"); */
 
     // By Chupsmovil at https://opengameart.org/content/voxel-skeleton-set-v1
     // No modifications to the original asset where made
     /* gstate.world.load_from_vox_file("./res/assets/11_SKELLINGTON_CHAMPION.vox", IVec3(-8, 1, -8)); */
 
-    /* gstate.world.load_from_vox_file("./res/assets/realistic_terrain.vox"); */
+    gstate.world.load_from_vox_file("./res/assets/realistic_terrain.vox");
     /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(28, 64, 48)); */
     /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-48, 20, 48)); */
     /* gstate.world.load_from_vox_file("./res/assets/Plane04.vox", IVec3(-48, 190, 48)); */
@@ -234,14 +242,24 @@ void init_graphics()
     SDL_SetRelativeMouseMode(gstate.win_state.grab_mouse);
     glClearColor(0.3, 0.3, 0.3, 1); // wrap this in vadgl
 
-    GLDevice device = new GLDevice();
-    device.device_init();
-
-    gstate.renderer = new GLVoxelRenderer!MChunk(device);
+    gstate.renderer = new GLVoxelRenderer!MChunk();
+    // Set initial camera
+    gstate.renderer.set_camera(gstate.camera);
     gstate.renderer.device_init();
+
+    auto ui_renderer = new MUIRenderer(gstate.win.get_sdl_win());
+    ui_renderer.initialize();
+
+    gstate.render_pipeline = new MRenderPipeline();
+    gstate.render_pipeline.push(gstate.renderer);
+    gstate.render_pipeline.push(ui_renderer);
 
     foreach (pos, chunk; gstate.world) {
         gstate.renderer.load_chunk(chunk, pos.vec());
+        /*
+           I could store all of this in a "chunk draw command" list which I
+           ten could trigger on render();
+        */
         gstate.renderer.queue_chunk(chunk, pos.vec());
     }
 
@@ -283,15 +301,13 @@ void main_loop()
 
         StopWatch watch = StopWatch(AutoStart.no);
         watch.start();
+
         gl_clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT).trust;
-
-        /* camera.set_direction(); */
+        // Updates camera direction
         gstate.camera.look_at();
+        gstate.renderer.set_camera(gstate.camera);
 
-        gstate.renderer.get_device().set_camera_pos(gstate.camera.pos.vector.vec());
-        gstate.renderer.get_device().set_mpv_matrix(gstate.camera.mpv(), true);
-
-        gstate.renderer.render();
+        gstate.render_pipeline.render();
 
         gstate.win.swap_buffer();
 
